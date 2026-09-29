@@ -1,0 +1,1130 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1f4e79">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Tablón">
+<title>Tablón</title>
+<style>
+  :root {
+    --bg: #f3f4f7; --card: #ffffff; --text: #1c2230; --muted: #6b7385; --line: #e3e6ec;
+    --primary: #1f4e79; --primary-soft: #e6eef7; --ok: #1e8a4c; --ok-soft: #e3f4ea;
+    --warn: #b36b00; --warn-soft: #fff2dc; --danger: #c0392b; --danger-soft: #fbe7e5;
+    --c-cuadrante: #1f4e79; --c-actividad: #7a3fa0; --c-anuncio: #1e8a4c;
+    --radius: 14px; --shadow: 0 1px 3px rgba(0,0,0,.07);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #12151c; --card: #1c2029; --text: #e8eaf0; --muted: #9aa1b2; --line: #2c313d;
+      --primary: #6aa7e0; --primary-soft: #1d2a3a; --ok: #4cc47f; --ok-soft: #173024;
+      --warn: #f0a93a; --warn-soft: #34290f; --danger: #ef6b5b; --danger-soft: #3a1c19;
+      --c-cuadrante: #6aa7e0; --c-actividad: #c190e0; --c-anuncio: #4cc47f;
+    }
+  }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  html, body { margin: 0; background: var(--bg); color: var(--text);
+    font: 16px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  a { color: var(--primary); }
+  header { position: sticky; top: 0; z-index: 5; background: #1f4e79; color: #fff;
+    padding: calc(12px + env(safe-area-inset-top)) 16px 12px; display: flex; align-items: center; gap: 12px; }
+  header .t { flex: 1; min-width: 0; }
+  header h1 { margin: 0; font-size: 1.15rem; }
+  header small { opacity: .85; display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  header button { background: rgba(255,255,255,.15); color: #fff; border: 0; border-radius: 10px; width: 38px; height: 38px;
+    font-size: 1.1rem; cursor: pointer; }
+  main { max-width: 760px; margin: 0 auto; padding: 16px 16px calc(90px + env(safe-area-inset-bottom)); }
+  nav.tabs { position: fixed; bottom: 0; left: 0; right: 0; z-index: 5; display: flex;
+    background: var(--card); border-top: 1px solid var(--line); padding-bottom: env(safe-area-inset-bottom); }
+  nav.tabs button { flex: 1; border: 0; background: none; color: var(--muted); padding: 10px 4px 8px;
+    font-size: .75rem; display: flex; flex-direction: column; align-items: center; gap: 2px; cursor: pointer; }
+  nav.tabs button .ic { font-size: 1.35rem; line-height: 1; }
+  nav.tabs button.on { color: var(--primary); font-weight: 600; }
+  .view { display: none; } .view.on { display: block; }
+
+  .chips { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; margin-bottom: 12px; }
+  .chip { border: 1px solid var(--line); background: var(--card); color: var(--text); border-radius: 999px;
+    padding: 6px 14px; font-size: .88rem; white-space: nowrap; cursor: pointer; }
+  .chip.on { background: var(--primary); border-color: var(--primary); color: #fff; }
+
+  .card { background: var(--card); border-radius: var(--radius); box-shadow: var(--shadow);
+    padding: 14px 16px; margin-bottom: 12px; border: 1px solid var(--line); }
+  .card.pinned { border-color: var(--warn); }
+  .card.past { opacity: .6; }
+  .card h3 { margin: 4px 0 6px; font-size: 1.05rem; }
+  .meta { color: var(--muted); font-size: .8rem; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .muted { color: var(--muted); font-size: .88rem; }
+  .tag { font-size: .7rem; font-weight: 700; text-transform: uppercase; letter-spacing: .04em;
+    padding: 2px 8px; border-radius: 6px; color: #fff; }
+  .tag.cuadrante { background: var(--c-cuadrante); } .tag.actividad { background: var(--c-actividad); }
+  .tag.anuncio { background: var(--c-anuncio); }
+  .texto { white-space: pre-wrap; margin: 6px 0 0; overflow-wrap: anywhere; }
+  .when { display: inline-flex; gap: 6px; align-items: center; background: var(--primary-soft); color: var(--primary);
+    padding: 4px 10px; border-radius: 8px; font-size: .85rem; font-weight: 600; margin-top: 6px; }
+  .thumb { display: block; width: 100%; max-height: 420px; object-fit: contain; background: var(--bg);
+    border-radius: 10px; margin-top: 10px; cursor: zoom-in; border: 1px solid var(--line); }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; align-items: center; }
+  .section-title { font-size: .8rem; text-transform: uppercase; letter-spacing: .06em; color: var(--muted);
+    margin: 20px 0 8px; font-weight: 700; }
+
+  .btn { border: 0; border-radius: 10px; padding: 10px 16px; font-size: .95rem; font-weight: 600; cursor: pointer;
+    background: var(--primary); color: #fff; text-decoration: none; display: inline-flex; align-items: center; gap: 6px;
+    justify-content: center; }
+  @media (prefers-color-scheme: dark) { .btn:not(.sec):not(.ghost):not(.danger) { color: #0e1a26; } }
+  .btn.sec { background: var(--primary-soft); color: var(--primary); }
+  .btn.ghost { background: none; color: var(--muted); border: 1px solid var(--line); }
+  .btn.danger { background: none; color: var(--danger); border: 1px solid var(--line); }
+  .btn.sm { padding: 6px 10px; font-size: .82rem; }
+  .btn.icon { padding: 6px 9px; font-size: .95rem; }
+  .btn:disabled { opacity: .5; cursor: default; }
+  .btn.block { width: 100%; }
+
+  label { display: block; font-size: .85rem; color: var(--muted); margin: 12px 0 4px; font-weight: 600; }
+  input, select, textarea { width: 100%; font: inherit; color: var(--text); background: var(--bg);
+    border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; }
+  textarea { min-height: 80px; resize: vertical; }
+  .check { display: flex; align-items: center; gap: 10px; margin-top: 12px; font-size: .95rem; color: var(--text); font-weight: 400; }
+  .check input { width: 20px; height: 20px; flex: none; }
+  .seg { display: flex; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+  .seg button { flex: 1; border: 0; background: var(--bg); color: var(--text); padding: 12px; font: inherit; font-size: 1.05rem; cursor: pointer; }
+  .seg button.on { background: var(--primary); color: #fff; font-weight: 700; }
+  @media (prefers-color-scheme: dark) { .seg button.on { color: #0e1a26; } }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
+  .notice { padding: 12px 14px; border-radius: 10px; font-size: .92rem; margin: 0 0 12px; }
+  .notice.ok { background: var(--ok-soft); color: var(--ok); }
+  .notice.warn { background: var(--warn-soft); color: var(--warn); }
+  .notice.bad { background: var(--danger-soft); color: var(--danger); }
+  .notice.info { background: var(--primary-soft); color: var(--primary); }
+  .empty { text-align: center; color: var(--muted); padding: 40px 16px; }
+
+  .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .stat { background: var(--bg); border-radius: 10px; padding: 10px; text-align: center; }
+  .stat b { display: block; font-size: 1.3rem; }
+  .stat span { font-size: .72rem; color: var(--muted); }
+  table { width: 100%; border-collapse: collapse; font-size: .85rem; }
+  th, td { text-align: left; padding: 7px 6px; border-bottom: 1px solid var(--line); }
+  th { color: var(--muted); font-weight: 600; font-size: .75rem; }
+  td.n, th.n { text-align: right; }
+  .table-wrap { overflow-x: auto; }
+
+  .li { display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    padding: 10px 0; border-bottom: 1px solid var(--line); }
+  .li:last-child { border-bottom: 0; }
+  .li .nm { font-weight: 600; } .li .sub { font-size: .8rem; color: var(--muted); margin-top: 2px; }
+  .li .acts { display: flex; gap: 6px; flex: none; }
+  .inline { background: var(--bg); border-radius: 12px; padding: 4px 12px 12px; margin: 0 0 8px; }
+  .pill { display: inline-block; font-size: .7rem; padding: 1px 7px; border-radius: 6px; background: var(--primary-soft);
+    color: var(--primary); font-weight: 700; vertical-align: middle; }
+  .pill.warn { background: var(--warn-soft); color: var(--warn); }
+  .st { display: inline-block; font-size: .75rem; font-weight: 700; padding: 2px 8px; border-radius: 6px; }
+  .st.ok { background: var(--ok-soft); color: var(--ok); }
+  .st.no { background: var(--primary-soft); color: var(--muted); }
+  .st.pend { background: var(--warn-soft); color: var(--warn); }
+  .st.bad { background: var(--danger-soft); color: var(--danger); }
+
+  #toast { position: fixed; left: 50%; bottom: calc(80px + env(safe-area-inset-bottom)); transform: translateX(-50%);
+    background: #222; color: #fff; padding: 10px 16px; border-radius: 10px; font-size: .9rem; z-index: 50;
+    opacity: 0; pointer-events: none; transition: opacity .2s; max-width: calc(100% - 32px); }
+  #toast.on { opacity: 1; }
+  #viewer { position: fixed; inset: 0; background: rgba(0,0,0,.92); z-index: 40; display: none;
+    align-items: center; justify-content: center; }
+  #viewer.on { display: flex; }
+  #viewer img { max-width: 100%; max-height: 100%; }
+  #viewer button { position: absolute; top: calc(12px + env(safe-area-inset-top)); right: 12px; }
+  #modal { position: fixed; inset: 0; z-index: 30; background: rgba(0,0,0,.45); display: none;
+    align-items: flex-end; justify-content: center; }
+  #modal.on { display: flex; }
+  #modal .sheet { background: var(--card); width: 100%; max-width: 560px; max-height: 88vh; overflow: auto;
+    border-radius: 18px 18px 0 0; padding: 16px 16px calc(20px + env(safe-area-inset-bottom)); }
+  @media (min-width: 600px) { #modal { align-items: center; } #modal .sheet { border-radius: 18px; } }
+  .spinner { width: 28px; height: 28px; border: 3px solid var(--line); border-top-color: var(--primary);
+    border-radius: 50%; animation: sp 0.8s linear infinite; margin: 40px auto; }
+  @keyframes sp { to { transform: rotate(360deg); } }
+  @media (max-width: 340px) { .stats { grid-template-columns: repeat(2, 1fr); } }
+</style>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+
+<header>
+  <div class="t">
+    <h1 id="congName">Tablón</h1>
+    <small id="hello"></small>
+  </div>
+  <button id="btnRefresh" title="Actualizar" aria-label="Actualizar" hidden>↻</button>
+</header>
+
+<main>
+  <section class="view on" id="v-tablon">
+    <div class="chips" id="filters">
+      <button class="chip on" data-f="todo">Todo</button>
+      <button class="chip" data-f="cuadrante">Cuadrantes</button>
+      <button class="chip" data-f="actividad">Actividades</button>
+      <button class="chip" data-f="anuncio">Anuncios</button>
+    </div>
+    <div id="board"><div class="spinner"></div></div>
+  </section>
+  <section class="view" id="v-informe"></section>
+  <section class="view" id="v-grupo"></section>
+  <section class="view" id="v-admin"></section>
+</main>
+
+<nav class="tabs" hidden>
+  <button class="on" data-v="tablon"><span class="ic">📌</span>Tablón</button>
+  <button data-v="informe"><span class="ic">📝</span>Mi informe</button>
+  <button data-v="grupo" hidden><span class="ic">👥</span>Mi grupo</button>
+  <button data-v="admin" hidden><span class="ic">⚙️</span>Admin</button>
+</nav>
+
+<div id="toast"></div>
+<div id="viewer"><button class="btn sec sm" onclick="closeViewer()">Cerrar ✕</button><img alt=""></div>
+<div id="modal"><div class="sheet"></div></div>
+
+<script>
+/* ═══════════════ CONFIGURACIÓN ═══════════════ */
+const SUPABASE_URL = 'https://blguysoqkkcglgrtvono.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_p4Ovs-Lnll9p2SlKt-fzag_g54SggJK';  // clave pública (se puede compartir)
+const CONGREGACION = 'Congregación Montequinto';
+/* ═════════════════════════════════════════════ */
+
+const BUCKET = 'tablon';
+const qs = new URLSearchParams(location.search);
+const store = {
+  get(k) { try { return localStorage.getItem(k); } catch { return null; } },
+  set(k, v) { try { localStorage.setItem(k, v); } catch {} }
+};
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+const MESES = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+const SPIN = '<div class="spinner"></div>';
+const ROLES = { publicador: 'Publicador', auxiliar: 'Auxiliar de grupo', superintendente: 'Superintendente de grupo',
+                secretario: 'Secretario', admin: 'Administrador' };
+
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
+  auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: false }
+});
+
+const state = { me: null, items: [], urls: {}, filter: 'todo', cerrados: new Set(), grupos: [] };
+const esGestor = () => ['secretario', 'admin'].includes(state.me?.rol);
+const esSuper = () => ['superintendente', 'auxiliar'].includes(state.me?.rol);
+const puedePublicar = () => state.me?.rol === 'admin';
+
+$('#congName').textContent = CONGREGACION;
+
+/* ─────────── Utilidades ─────────── */
+function traducir(err) {
+  const m = String(err?.message || err || 'Error');
+  if (/row-level security|permission denied|PGRST116|0 rows/i.test(m)) return 'No tienes permiso para hacer esto (o el mes ya está cerrado).';
+  if (/JWT expired|invalid JWT|not authenticated/i.test(m)) return 'Tu sesión ha caducado. Vuelve a abrir tu enlace.';
+  if (/Failed to fetch|NetworkError|Load failed/i.test(m)) return 'Sin conexión. Revisa internet e inténtalo de nuevo.';
+  return m;
+}
+async function q(p) { const { data, error } = await p; if (error) throw new Error(traducir(error)); return data; }
+/** Descarga todas las filas en páginas de 1000 (límite de Supabase por consulta) */
+async function todas(mk) {
+  const out = [];
+  for (let from = 0; ; from += 1000) {
+    const d = await q(mk().range(from, from + 999));
+    out.push(...d);
+    if (d.length < 1000) return out;
+  }
+}
+function toast(msg) {
+  const t = $('#toast'); t.textContent = msg; t.classList.add('on');
+  clearTimeout(toast._t); toast._t = setTimeout(() => t.classList.remove('on'), 3000);
+}
+function modal(html) {
+  const m = $('#modal');
+  m.querySelector('.sheet').innerHTML = html + '<div class="row"><button class="btn ghost block" onclick="closeModal()">Cerrar</button></div>';
+  m.classList.add('on');
+  return m.querySelector('.sheet');
+}
+function closeModal() { $('#modal').classList.remove('on'); }
+$('#modal').onclick = e => { if (e.target.id === 'modal') closeModal(); };
+const num = v => { const n = parseFloat(v); return isNaN(n) ? 0 : n; };
+const digits = t => { const d = String(t || '').replace(/\D/g, ''); return d.length === 9 ? '34' + d : d; };
+const waHref = (tel, text) => `https://wa.me/${digits(tel)}?text=${encodeURIComponent(text)}`;
+async function copiar(text, ok = 'Copiado') {
+  try { await navigator.clipboard.writeText(text); toast(ok); } catch { prompt('Copia el texto:', text); }
+}
+function busy(btn, txt) { const t = btn.textContent; btn.disabled = true; btn.textContent = txt; return () => { btn.disabled = false; btn.textContent = t; }; }
+
+/* ─────────── Fechas ─────────── */
+const ym = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+function mesLabel(m) { const [y, mm] = m.split('-'); return `${MESES[+mm - 1]} ${y}`; }
+function prevMonth() { const d = new Date(); d.setDate(1); d.setMonth(d.getMonth() - 1); return ym(d); }
+function lastMonths(n) {
+  const out = [], d = new Date(); d.setDate(1);
+  for (let i = 0; i < n; i++) { out.push(ym(d)); d.setMonth(d.getMonth() - 1); }
+  return out;
+}
+const mesOptions = (n, sel) => lastMonths(n).map(m => `<option value="${m}" ${m === sel ? 'selected' : ''}>${mesLabel(m)}</option>`).join('');
+function fmtFecha(s) {
+  if (!s) return '';
+  const d = new Date(s); if (isNaN(d)) return s;
+  const hasTime = d.getHours() || d.getMinutes();
+  return d.toLocaleDateString('es-ES', { weekday: 'short', day: 'numeric', month: 'short' }) +
+    (hasTime ? ' · ' + d.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }) : '');
+}
+function hace(s) {
+  const d = new Date(s); if (isNaN(d)) return '';
+  const dias = Math.floor((Date.now() - d) / 864e5);
+  if (dias <= 0) return 'hoy'; if (dias === 1) return 'ayer';
+  if (dias < 30) return `hace ${dias} días`;
+  return d.toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' });
+}
+const fechaCorta = s => s ? new Date(s).toLocaleDateString('es-ES', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '';
+
+/* ─────────── Entrada con el enlace personal ─────────── */
+async function errFuncion(error, data) {
+  if (data?.error) return data.error;
+  try { const j = await error.context.json(); if (j?.error) return j.error; } catch {}
+  return traducir(error);
+}
+
+async function boot() {
+  try {
+    const t = qs.get('t');
+    let { data: { session } } = await sb.auth.getSession();
+
+    // Si llega un enlace nuevo (o de otra persona), se canjea por una sesión.
+    // El código se deja en la dirección para que el icono de la pantalla de inicio también funcione.
+    if (t && (!session || store.get('tablon_t') !== t)) {
+      $('#board').innerHTML = `<div class="empty">Entrando…</div>${SPIN}`;
+      const { data, error } = await sb.functions.invoke('enlace', { body: { token: t } });
+      if (error || data?.error) return sinAcceso(await errFuncion(error, data));
+      if (session) await sb.auth.signOut({ scope: 'local' }).catch(() => {});
+      let r = await sb.auth.verifyOtp({ token_hash: data.token_hash, type: 'magiclink' });
+      if (r.error) r = await sb.auth.verifyOtp({ token_hash: data.token_hash, type: 'email' });
+      if (r.error) return sinAcceso(traducir(r.error));
+      store.set('tablon_t', t);
+      session = r.data.session;
+    }
+    if (!session) return sinAcceso();
+
+    const perfil = await q(sb.rpc('mi_perfil'));
+    if (!perfil) {
+      await sb.auth.signOut({ scope: 'local' }).catch(() => {});
+      return sinAcceso('Tu acceso ya no está activo. Pide un enlace nuevo a tu superintendente de grupo.');
+    }
+    state.me = perfil;
+    $('#hello').textContent = `${perfil.nombre}${perfil.grupo ? ' · ' + perfil.grupo : ''}`;
+    $('nav.tabs').hidden = false;
+    $('#btnRefresh').hidden = false;
+    document.querySelector('[data-v="grupo"]').hidden = !(esSuper() || esGestor());
+    document.querySelector('[data-v="admin"]').hidden = !esGestor();
+    await Promise.all([cargarCerrados(), loadBoard()]);
+  } catch (e) {
+    $('#board').innerHTML = `<div class="empty">⚠️ ${esc(e.message)}</div>`;
+  }
+}
+
+function sinAcceso(msg) {
+  $('nav.tabs').hidden = true;
+  $('main').innerHTML = `
+    <div class="card" style="margin-top:24px;text-align:center">
+      <div style="font-size:2.6rem">🔗</div>
+      <h3>Abre tu enlace personal</h3>
+      ${msg ? `<div class="notice warn">${esc(msg)}</div>` : ''}
+      <p>Para entrar necesitas el enlace que te ha enviado tu superintendente de grupo por WhatsApp.
+         No hace falta usuario ni contraseña.</p>
+      <p class="muted">Si lo has perdido o no funciona, pídele uno nuevo.</p>
+    </div>`;
+}
+
+async function cargarCerrados() {
+  const rows = await q(sb.from('meses_cerrados').select('mes'));
+  state.cerrados = new Set(rows.map(r => r.mes));
+}
+
+/* ─────────── Navegación ─────────── */
+let vista = 'tablon';
+document.querySelectorAll('nav.tabs button').forEach(b => b.onclick = () => show(b.dataset.v));
+function show(v) {
+  vista = v;
+  document.querySelectorAll('nav.tabs button').forEach(b => b.classList.toggle('on', b.dataset.v === v));
+  document.querySelectorAll('.view').forEach(s => s.classList.toggle('on', s.id === 'v-' + v));
+  ({ tablon: renderBoard, informe: renderInforme, grupo: renderGrupo, admin: renderAdmin })[v]();
+  scrollTo(0, 0);
+}
+$('#btnRefresh').onclick = async () => {
+  await cargarCerrados().catch(() => {});
+  if (vista === 'tablon') loadBoard(); else show(vista);
+};
+document.querySelectorAll('#filters .chip').forEach(c => c.onclick = () => {
+  state.filter = c.dataset.f;
+  document.querySelectorAll('#filters .chip').forEach(x => x.classList.toggle('on', x === c));
+  renderBoard();
+});
+
+/* ─────────── Tablón ─────────── */
+const isImg = it => /^image\//.test(it.archivo_tipo || '');
+const isPdf = it => it.archivo_tipo === 'application/pdf';
+const TIPO_LBL = { cuadrante: 'Cuadrante', actividad: 'Actividad', anuncio: 'Anuncio' };
+
+async function loadBoard() {
+  try {
+    state.items = await q(sb.from('tablon').select('*').order('creado', { ascending: false }).limit(300));
+    const paths = state.items.filter(i => i.archivo_path && !state.urls[i.archivo_path]).map(i => i.archivo_path);
+    if (paths.length) {
+      const signed = await q(sb.storage.from(BUCKET).createSignedUrls(paths, 60 * 60 * 12));
+      signed.forEach(s => { if (s.signedUrl) state.urls[s.path] = s.signedUrl; });
+    }
+    renderBoard();
+  } catch (e) { $('#board').innerHTML = `<div class="empty">⚠️ ${esc(e.message)}</div>`; }
+}
+
+function isPast(it) {
+  if (it.tipo !== 'actividad' || !it.fecha_evento) return false;
+  const d = new Date(it.fecha_evento); d.setHours(23, 59, 59);
+  return d < new Date();
+}
+function sortItems(list) {
+  return list.slice().sort((a, b) => {
+    if (a.fijado !== b.fijado) return a.fijado ? -1 : 1;
+    const pa = isPast(a), pb = isPast(b);
+    if (pa !== pb) return pa ? 1 : -1;
+    if (a.tipo === 'actividad' && b.tipo === 'actividad' && !pa && a.fecha_evento && b.fecha_evento)
+      return a.fecha_evento.localeCompare(b.fecha_evento);
+    return (b.creado || '').localeCompare(a.creado || '');
+  });
+}
+function linkify(s) { return s.replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1" target="_blank" rel="noopener">$1</a>'); }
+
+function itemCard(it, admin = false) {
+  const url = it.archivo_path ? state.urls[it.archivo_path] : null;
+  const media = url && isImg(it)
+    ? `<img class="thumb" loading="lazy" src="${esc(url)}" alt="${esc(it.titulo)}" onclick="openViewer('${esc(it.archivo_path)}')">` : '';
+  const fileBtn = url ? `<a class="btn sec sm" href="${esc(url)}" target="_blank" rel="noopener">
+      ${isPdf(it) ? '📄 Ver PDF' : isImg(it) ? '🔍 Abrir original' : '📎 Abrir archivo'}</a>` : '';
+  const adminBtns = admin ? `
+      <button class="btn ghost sm" onclick="pinItem('${it.id}')">${it.fijado ? '📍 Desfijar' : '📌 Fijar'}</button>
+      <button class="btn danger sm" onclick="deleteItem('${it.id}')">🗑 Borrar</button>` : '';
+  return `
+    <article class="card ${it.fijado ? 'pinned' : ''} ${isPast(it) ? 'past' : ''}">
+      <div class="meta">
+        <span class="tag ${it.tipo}">${TIPO_LBL[it.tipo] || it.tipo}</span>
+        ${it.fijado ? '<span>📌 Fijado</span>' : ''}
+        <span>${hace(it.creado)}</span>
+      </div>
+      <h3>${esc(it.titulo)}</h3>
+      ${it.fecha_evento ? `<div class="when">🗓 ${esc(fmtFecha(it.fecha_evento))}</div>` : ''}
+      ${it.texto ? `<p class="texto">${linkify(esc(it.texto))}</p>` : ''}
+      ${media}
+      ${(fileBtn || adminBtns) ? `<div class="row">${fileBtn}${adminBtns}</div>` : ''}
+    </article>`;
+}
+function renderBoard() {
+  if (!state.me) return;
+  const list = sortItems(state.items.filter(i => state.filter === 'todo' || i.tipo === state.filter));
+  $('#board').innerHTML = list.length ? list.map(i => itemCard(i)).join('')
+    : `<div class="empty">No hay publicaciones todavía.</div>`;
+}
+function openViewer(path) { const v = $('#viewer'); v.querySelector('img').src = state.urls[path]; v.classList.add('on'); }
+function closeViewer() { $('#viewer').classList.remove('on'); }
+$('#viewer').onclick = e => { if (e.target.id === 'viewer') closeViewer(); };
+
+/* ─────────── Formulario de informe (propio o en nombre de otro) ─────────── */
+/** o = { pub:{id,nombre,precursor}, mes, existente, propio, onSaved } */
+function informeForm(el, o) {
+  const ex = o.existente, reg = !!o.pub.precursor, cerrado = state.cerrados.has(o.mes);
+  const bloqueado = cerrado && ex && !esGestor();
+  const f = { participo: ex ? ex.participo : true, auxiliar: ex ? ex.auxiliar : false };
+  const tu = o.propio;
+  const porOtro = ex && ex.enviado_por && ex.enviado_por !== o.pub.id;
+  el.innerHTML = `
+    ${bloqueado ? `<div class="notice warn">El secretario ya cerró ${mesLabel(o.mes)}. Si hay que corregir algo, habla con él.</div>`
+      : cerrado ? `<div class="notice warn">${mesLabel(o.mes)} ya está cerrado: se enviará como informe tardío.</div>` : ''}
+    ${ex && !bloqueado ? `<div class="notice ok">✓ Informe enviado${porOtro && tu ? ' por tu superintendente' : ''}. Puedes corregirlo.</div>` : ''}
+    <label>¿${tu ? 'Participaste' : 'Participó'} en alguna faceta de la predicación este mes?</label>
+    <div class="seg"><button data-v="1" class="${f.participo ? 'on' : ''}">Sí</button><button data-v="0" class="${f.participo ? '' : 'on'}">No</button></div>
+    <div class="fields" ${f.participo ? '' : 'hidden'}>
+      ${reg ? '<div class="row"><span class="pill">Precursor regular</span></div>'
+        : `<label class="check"><input type="checkbox" class="aux" ${f.auxiliar ? 'checked' : ''}> ${tu ? 'Fui' : 'Fue'} precursor auxiliar este mes</label>`}
+      <div class="grid2">
+        <div><label>Cursos bíblicos</label>
+          <input class="cursos" type="number" inputmode="numeric" min="0" max="99" value="${ex ? esc(ex.cursos) : ''}" placeholder="0"></div>
+        <div class="horasBox" ${reg || f.auxiliar ? '' : 'hidden'}><label>Horas</label>
+          <input class="horas" type="number" inputmode="decimal" min="0" max="300" step="0.5" value="${ex && (reg || ex.auxiliar) ? esc(num(ex.horas)) : ''}" placeholder="0"></div>
+      </div>
+    </div>
+    <label>Comentarios (opcional)</label>
+    <textarea class="com" placeholder="${tu ? 'Algo que quieras comentar' : 'Nota para el secretario'}">${ex ? esc(ex.comentarios) : ''}</textarea>
+    <div class="row"><button class="btn block send">${ex ? 'Guardar cambios' : 'Enviar informe'}</button></div>`;
+
+  if (bloqueado) { el.querySelectorAll('input, textarea, button').forEach(x => { x.disabled = true; }); return; }
+  el.querySelectorAll('.seg button').forEach(b => b.onclick = () => {
+    f.participo = b.dataset.v === '1';
+    el.querySelectorAll('.seg button').forEach(x => x.classList.toggle('on', x === b));
+    el.querySelector('.fields').hidden = !f.participo;
+  });
+  const aux = el.querySelector('.aux');
+  if (aux) aux.onchange = () => { f.auxiliar = aux.checked; el.querySelector('.horasBox').hidden = !aux.checked; };
+  el.querySelector('.send').onclick = async e => {
+    const horas = num(el.querySelector('.horas').value);
+    if (f.participo && (reg || f.auxiliar) && !horas && !confirm('No has puesto horas. ¿Enviar igualmente?')) return;
+    const done = busy(e.target, 'Enviando…');
+    try {
+      const row = {
+        mes: o.mes, publicador_id: o.pub.id, participo: f.participo,
+        cursos: Math.max(0, parseInt(el.querySelector('.cursos').value, 10) || 0),
+        horas, auxiliar: !reg && f.auxiliar, comentarios: el.querySelector('.com').value.trim()
+      };
+      const saved = await q(sb.from('informes').upsert(row, { onConflict: 'mes,publicador_id' }).select().single());
+      toast(tu ? '✓ Informe enviado. ¡Gracias!' : `✓ Informe de ${o.pub.nombre} guardado`);
+      o.onSaved && o.onSaved(saved);
+    } catch (err) { toast('⚠️ ' + err.message); done(); }
+  };
+}
+
+/* ─────────── Mi informe ─────────── */
+let infMes = null;
+async function renderInforme() {
+  const el = $('#v-informe');
+  infMes = infMes || prevMonth();
+  el.innerHTML = SPIN;
+  try {
+    const mis = await q(sb.from('informes').select('*').eq('publicador_id', state.me.id).order('mes', { ascending: false }).limit(12));
+    el.innerHTML = `
+      <div class="card">
+        <h3>Informe de predicación</h3>
+        <label for="infMes">Mes</label>
+        <select id="infMes">${mesOptions(4, infMes)}</select>
+        <div id="infForm"></div>
+      </div>
+      ${mis.length ? `<div class="section-title">Mis informes</div><div class="card table-wrap"><table>
+        <tr><th>Mes</th><th>Participó</th><th class="n">Cursos</th><th class="n">Horas</th></tr>
+        ${mis.map(r => `<tr><td>${mesLabel(r.mes)}${r.tardio ? ' <span class="pill warn">Tardío</span>' : ''}</td>
+          <td>${r.participo ? 'Sí' : 'No'}${r.auxiliar ? ' <span class="pill">Aux</span>' : ''}</td>
+          <td class="n">${r.cursos}</td><td class="n">${r.regular || r.auxiliar ? num(r.horas) : '—'}</td></tr>`).join('')}
+      </table></div>` : ''}`;
+    $('#infMes').onchange = e => { infMes = e.target.value; renderInforme(); };
+    informeForm($('#infForm'), { pub: state.me, mes: infMes, existente: mis.find(r => r.mes === infMes), propio: true, onSaved: renderInforme });
+  } catch (e) { el.innerHTML = `<div class="empty">⚠️ ${esc(e.message)}</div>`; }
+}
+
+/* ─────────── Mi grupo (superintendente / auxiliar; el secretario elige grupo) ─────────── */
+let grpMes = null, grpId = null;
+const msgEnlace = (nombre, url) => `Hola ${nombre}, este es tu enlace personal al tablón de la congregación. Ábrelo y añádelo a la pantalla de inicio del móvil: no hace falta usuario ni contraseña.\n${url}`;
+const linkUrl = tok => `${location.origin}${location.pathname}?t=${tok}`;
+
+function chipInforme(r) {
+  if (!r) return '<span class="st pend">Pendiente</span>';
+  if (!r.participo) return '<span class="st no">No participó</span>';
+  const h = r.regular || r.auxiliar ? ` · ${num(r.horas)} h` : '';
+  const c = r.cursos ? `${r.cursos} curso${r.cursos === 1 ? '' : 's'}` : 'Participó';
+  return `<span class="st ok">✓ ${c}${h}${r.auxiliar ? ' · Aux' : ''}</span>`;
+}
+
+async function renderGrupo() {
+  const el = $('#v-grupo');
+  grpMes = grpMes || prevMonth();
+  grpId = grpId || state.me.grupo_id;
+  try {
+    if (esGestor() && !state.grupos.length) state.grupos = await q(sb.from('grupos').select('id,nombre').order('nombre'));
+    if (esGestor() && !grpId && state.grupos.length) grpId = state.grupos[0].id;
+  } catch (e) { el.innerHTML = `<div class="empty">⚠️ ${esc(e.message)}</div>`; return; }
+
+  el.innerHTML = `
+    <div class="card"><div class="grid2">
+      ${esGestor() ? `<div><label for="gSel">Grupo</label><select id="gSel">${state.grupos.map(g =>
+        `<option value="${g.id}" ${g.id === grpId ? 'selected' : ''}>${esc(g.nombre)}</option>`).join('')}</select></div>` : ''}
+      <div ${esGestor() ? '' : 'style="grid-column:1/-1"'}><label for="gMes">Mes</label><select id="gMes">${mesOptions(6, grpMes)}</select></div>
+    </div></div>
+    <div id="gBody">${SPIN}</div>`;
+  if ($('#gSel')) $('#gSel').onchange = e => { grpId = +e.target.value; renderGrupo(); };
+  $('#gMes').onchange = e => { grpMes = e.target.value; renderGrupo(); };
+  if (!grpId) { $('#gBody').innerHTML = '<div class="empty">No tienes grupo asignado.</div>'; return; }
+
+  try {
+    const [miembros, reps, ent] = await Promise.all([
+      q(sb.from('publicadores').select('id,nombre,precursor,rol,telefono,tiene_enlace').eq('grupo_id', grpId).eq('activo', true).order('nombre')),
+      q(sb.from('informes').select('*').eq('grupo_id', grpId).eq('mes', grpMes)),
+      q(sb.from('entregas').select('*').eq('grupo_id', grpId).eq('mes', grpMes).maybeSingle())
+    ]);
+    const byPub = Object.fromEntries(reps.map(r => [r.publicador_id, r]));
+    const pend = miembros.filter(m => !byPub[m.id]);
+    miembros.sort((a, b) => (!!byPub[a.id] - !!byPub[b.id]) || a.nombre.localeCompare(b.nombre, 'es')); // pendientes primero
+    const cerrado = state.cerrados.has(grpMes);
+    const cambios = ent?.estado === 'entregado' && reps.some(r => r.actualizado > ent.entregado_at);
+    const yes = reps.filter(r => r.participo);
+
+    let banner = '';
+    if (cerrado) banner = `<div class="notice info">🔒 ${mesLabel(grpMes)} está cerrado por el secretario.</div>`;
+    else if (ent?.estado === 'devuelto') banner = `<div class="notice bad">↩️ El secretario ha devuelto el informe del grupo${ent.devuelto_nota ? `: <b>${esc(ent.devuelto_nota)}</b>` : '.'}</div>`;
+    else if (ent?.estado === 'entregado') banner = `<div class="notice ok">📤 Entregado al secretario el ${fechaCorta(ent.entregado_at)}.${cambios ? '<br><b>Hay cambios después de la entrega:</b> vuelve a entregar.' : ''}</div>`;
+    else banner = `<div class="notice warn">📋 En curso: faltan ${pend.length} de ${miembros.length}.</div>`;
+
+    $('#gBody').innerHTML = `
+      ${banner}
+      <div class="card"><div class="stats">
+        <div class="stat"><b>${reps.length}/${miembros.length}</b><span>Recibidos</span></div>
+        <div class="stat"><b>${yes.length}</b><span>Participaron</span></div>
+        <div class="stat"><b>${yes.reduce((t, r) => t + r.cursos, 0)}</b><span>Cursos bíblicos</span></div>
+      </div>
+      <div class="row">
+        ${!cerrado ? `<button class="btn" id="gEntregar">📤 ${ent?.estado === 'entregado' ? 'Volver a entregar' : 'Entregar al secretario'}</button>` : ''}
+        ${pend.length ? '<button class="btn sec sm" id="gRecordar">📋 Copiar recordatorio</button>' : ''}
+        <button class="btn sec sm" id="gExcel">📊 Excel</button>
+      </div></div>
+
+      <div class="section-title">Hermanos del grupo</div>
+      <div class="card">
+        ${miembros.map(m => `
+          <div class="li">
+            <div style="min-width:0">
+              <div class="nm">${esc(m.nombre)} ${m.precursor ? '<span class="pill">PR</span>' : ''}
+                ${byPub[m.id]?.tardio ? '<span class="pill warn">Tardío</span>' : ''}</div>
+              <div class="sub">${chipInforme(byPub[m.id])}
+                ${byPub[m.id] && byPub[m.id].enviado_por && byPub[m.id].enviado_por !== m.id ? ' · lo envió el superintendente' : ''}
+                ${byPub[m.id]?.comentarios ? ` · 💬 ${esc(byPub[m.id].comentarios)}` : ''}</div>
+            </div>
+            <div class="acts">
+              <button class="btn sec icon" title="Informar por ${esc(m.nombre)}" data-inf="${m.id}">📝</button>
+              ${!byPub[m.id] ? `<a class="btn sec icon" title="Recordar por WhatsApp" target="_blank" rel="noopener"
+                href="${waHref(m.telefono, `Hola ${m.nombre}, ¿me puedes pasar tu informe de ${mesLabel(grpMes)}? Puedes enviarlo desde tu enlace del tablón. ¡Gracias!`)}">💬</a>` : ''}
+              ${(esGestor() || !['secretario', 'admin'].includes(m.rol)) ? `<button class="btn ghost icon" title="Enlace personal" data-lnk="${m.id}">🔗</button>` : ''}
+            </div>
+          </div>
+          <div class="inline" id="if-${m.id}" hidden></div>`).join('') || '<div class="empty">No hay hermanos en este grupo.</div>'}
+      </div>`;
+
+    document.querySelectorAll('[data-inf]').forEach(b => b.onclick = () => {
+      const m = miembros.find(x => x.id === b.dataset.inf), box = $('#if-' + m.id);
+      if (!box.hidden) { box.hidden = true; return; }
+      document.querySelectorAll('.inline').forEach(x => { x.hidden = true; });
+      box.hidden = false;
+      informeForm(box, { pub: m, mes: grpMes, existente: byPub[m.id], propio: false, onSaved: renderGrupo });
+    });
+    document.querySelectorAll('[data-lnk]').forEach(b => b.onclick = () => crearEnlace(miembros.find(x => x.id === b.dataset.lnk)));
+    if ($('#gRecordar')) $('#gRecordar').onclick = () => copiar(
+      `📋 Recordatorio: aún falta el informe de ${mesLabel(grpMes)} de ${pend.map(p => p.nombre).join(', ')}. ` +
+      `Podéis enviarlo desde vuestro enlace del tablón. ¡Gracias!`, 'Recordatorio copiado: pégalo en el grupo de WhatsApp');
+    if ($('#gEntregar')) $('#gEntregar').onclick = async e => {
+      if (pend.length && !confirm(`Faltan ${pend.length} informes (${pend.map(p => p.nombre).join(', ')}). ¿Entregar igualmente?`)) return;
+      const nota = prompt('Nota para el secretario (opcional):', pend.length ? `Pendientes: ${pend.map(p => p.nombre).join(', ')}` : '');
+      if (nota === null) return;
+      const done = busy(e.target, 'Entregando…');
+      try { await q(sb.rpc('entregar_grupo', { p_mes: grpMes, p_grupo: grpId, p_nota: nota })); toast('📤 Entregado al secretario'); renderGrupo(); }
+      catch (err) { toast('⚠️ ' + err.message); done(); }
+    };
+    $('#gExcel').onclick = async e => {
+      const done = busy(e.target, 'Generando…');
+      try {
+        const d = await cargarDatos(grpMes, grpMes, grpId);
+        const ids = new Set(d.reports.map(r => r.pubId));
+        await exportMes(d.pubs, d.reports, d.pubs.filter(p => !ids.has(p.id)), grpMes, ' - ' + (d.gn[grpId] || 'grupo'));
+      } catch (err) { toast('⚠️ ' + err.message); }
+      done();
+    };
+  } catch (e) { $('#gBody').innerHTML = `<div class="empty">⚠️ ${esc(e.message)}</div>`; }
+}
+
+async function crearEnlace(p) {
+  if (p.tiene_enlace && !confirm(`${p.nombre} ya tiene un enlace. Si creas uno nuevo, el anterior dejará de funcionar y tendrá que abrir el nuevo.\n\n¿Continuar?`)) return;
+  try {
+    const tok = await q(sb.rpc('generar_enlace', { p_pub: p.id }));
+    p.tiene_enlace = true;
+    const url = linkUrl(tok);
+    const s = modal(`
+      <h3>Enlace de ${esc(p.nombre)}</h3>
+      <p class="muted">Envíaselo ahora. Por seguridad no se puede volver a ver; si se pierde, se crea otro.</p>
+      <input readonly value="${esc(url)}" onclick="this.select()">
+      <div class="row">
+        <button class="btn sec" id="lnkCopy">🔗 Copiar</button>
+        <a class="btn" target="_blank" rel="noopener" href="${waHref(p.telefono, msgEnlace(p.nombre, url))}">💬 Enviar por WhatsApp</a>
+      </div>`);
+    s.querySelector('#lnkCopy').onclick = () => copiar(url, 'Enlace copiado');
+  } catch (e) { toast('⚠️ ' + e.message); }
+}
+
+/* ─────────── Admin (secretario / administrador) ─────────── */
+let adminTab = null, repMes = prevMonth();
+
+function renderAdmin() {
+  const tabs = [
+    ...(puedePublicar() ? [['publicar', '➕ Publicar'], ['gestionar', '🗂 Publicaciones']] : []),
+    ['informes', '📊 Informes'], ['publicadores', '👥 Publicadores']
+  ];
+  if (!tabs.some(t => t[0] === adminTab)) adminTab = tabs[0][0];
+  $('#v-admin').innerHTML = `
+    <div class="chips" id="aTabs">${tabs.map(([k, l]) => `<button class="chip ${adminTab === k ? 'on' : ''}" data-t="${k}">${l}</button>`).join('')}</div>
+    <div id="aBody"></div>`;
+  document.querySelectorAll('#aTabs .chip').forEach(c => c.onclick = () => { adminTab = c.dataset.t; renderAdmin(); });
+  ({ publicar: adminPublicar, gestionar: adminGestionar, informes: adminInformes, publicadores: adminPublicadores })[adminTab]();
+}
+
+/* Publicar */
+function adminPublicar() {
+  $('#aBody').innerHTML = `<div class="card">
+    <label for="pTipo">Tipo</label>
+    <select id="pTipo"><option value="cuadrante">Cuadrante</option><option value="actividad">Actividad</option><option value="anuncio">Anuncio</option></select>
+    <label for="pTit">Título</label><input id="pTit" maxlength="200" placeholder="Ej: Programa reunión entre semana — octubre">
+    <label for="pTxt">Texto (opcional)</label><textarea id="pTxt" maxlength="5000"></textarea>
+    <div id="pFechaBox" hidden><label for="pFecha">Fecha y hora de la actividad</label><input id="pFecha" type="datetime-local"></div>
+    <label for="pFile">Archivo (PDF o imagen, opcional)</label><input id="pFile" type="file" accept="application/pdf,image/*">
+    <label class="check"><input type="checkbox" id="pPin"> Fijar arriba del todo</label>
+    <div class="row"><button class="btn block" id="pGo">Publicar</button></div></div>`;
+  const tipo = $('#pTipo');
+  tipo.onchange = () => { $('#pFechaBox').hidden = tipo.value !== 'actividad'; };
+  $('#pGo').onclick = async e => {
+    const titulo = $('#pTit').value.trim();
+    if (!titulo) return toast('Falta el título');
+    const fecha = tipo.value === 'actividad' && $('#pFecha').value ? new Date($('#pFecha').value).toISOString() : null;
+    const done = busy(e.target, 'Subiendo…');
+    try {
+      const row = { tipo: tipo.value, titulo, texto: $('#pTxt').value.trim(), fecha_evento: fecha, fijado: $('#pPin').checked };
+      const f = $('#pFile').files[0];
+      if (f) {
+        const { blob, name, type } = await prepareFile(f);
+        const safe = name.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^\w.-]+/g, '_').slice(-80);
+        const path = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}-${safe}`;
+        await q(sb.storage.from(BUCKET).upload(path, blob, { contentType: type, upsert: false }));
+        Object.assign(row, { archivo_path: path, archivo_nombre: name, archivo_tipo: type });
+      }
+      await q(sb.from('tablon').insert(row).select().single());
+      toast('✓ Publicado');
+      await loadBoard();
+      adminPublicar();
+    } catch (err) { toast('⚠️ ' + err.message); done(); }
+  };
+}
+
+/** Las fotos grandes del móvil se reducen a 2000 px antes de subir */
+async function prepareFile(f) {
+  if (f.size > 20 * 1024 * 1024 && !/^image\//.test(f.type)) throw new Error('Archivo demasiado grande (máx. 20 MB)');
+  let blob = f, name = f.name, type = f.type || 'application/octet-stream';
+  if (/^image\/(jpeg|png|webp|heic)/.test(type) && f.size > 1.5 * 1024 * 1024) {
+    try {
+      const bmp = await createImageBitmap(f);
+      const s = Math.min(1, 2000 / Math.max(bmp.width, bmp.height));
+      const c = document.createElement('canvas');
+      c.width = Math.round(bmp.width * s); c.height = Math.round(bmp.height * s);
+      c.getContext('2d').drawImage(bmp, 0, 0, c.width, c.height);
+      blob = await new Promise(r => c.toBlob(r, 'image/jpeg', 0.85));
+      type = 'image/jpeg'; name = name.replace(/\.\w+$/, '') + '.jpg';
+    } catch { /* si falla, se sube el original */ }
+  }
+  return { blob, name, type };
+}
+
+function adminGestionar() {
+  const list = sortItems(state.items);
+  $('#aBody').innerHTML = list.length ? list.map(i => itemCard(i, true)).join('') : '<div class="empty">Nada publicado.</div>';
+}
+async function pinItem(id) {
+  const it = state.items.find(i => i.id === id);
+  try { await q(sb.from('tablon').update({ fijado: !it.fijado }).eq('id', id)); it.fijado = !it.fijado; adminGestionar(); }
+  catch (e) { toast('⚠️ ' + e.message); }
+}
+async function deleteItem(id) {
+  if (!confirm('¿Borrar esta publicación y su archivo?')) return;
+  const it = state.items.find(i => i.id === id);
+  try {
+    if (it.archivo_path) await q(sb.storage.from(BUCKET).remove([it.archivo_path]));
+    await q(sb.from('tablon').delete().eq('id', id));
+    state.items = state.items.filter(i => i.id !== id);
+    adminGestionar(); toast('Borrado');
+  } catch (e) { toast('⚠️ ' + e.message); }
+}
+
+/* Datos para informes y Excel (grupo opcional) */
+async function cargarDatos(desde, hasta, grupo = null) {
+  const [grupos, pubs, reps] = await Promise.all([
+    q(sb.from('grupos').select('id,nombre')),
+    q(sb.from('publicadores').select('id,nombre,grupo_id,precursor,activo')),
+    todas(() => {
+      let x = sb.from('informes').select('*').gte('mes', desde).lte('mes', hasta).order('mes').order('publicador_id');
+      return grupo ? x.eq('grupo_id', grupo) : x;
+    })
+  ]);
+  const gn = Object.fromEntries(grupos.map(g => [g.id, g.nombre]));
+  const byId = Object.fromEntries(pubs.map(p => [p.id, p]));
+  return {
+    grupos, gn, byId, raw: reps,
+    pubs: pubs.filter(p => p.activo && (!grupo || p.grupo_id === grupo))
+      .map(p => ({ id: p.id, nombre: p.nombre, grupo: gn[p.grupo_id] || 'Sin grupo', grupo_id: p.grupo_id, precursor: p.precursor ? 'si' : 'no' })),
+    reports: reps.map(r => ({
+      mes: r.mes, pubId: r.publicador_id, nombre: byId[r.publicador_id]?.nombre || '(sin nombre)',
+      grupo: gn[r.grupo_id] || 'Sin grupo', participo: r.participo ? 'si' : 'no', cursos: r.cursos, horas: r.horas,
+      auxiliar: r.auxiliar ? 'si' : 'no', regular: r.regular ? 'si' : 'no',
+      comentarios: (r.tardio ? '[Tardío] ' : '') + (r.comentarios || ''), actualizado: r.actualizado
+    }))
+  };
+}
+
+/* Informes de la congregación */
+async function adminInformes() {
+  $('#aBody').innerHTML = `<div class="card"><label for="iMes">Mes</label><select id="iMes">${mesOptions(12, repMes)}</select></div><div id="iRes">${SPIN}</div>`;
+  $('#iMes').onchange = e => { repMes = e.target.value; adminInformes(); };
+  try {
+    const [d, ents] = await Promise.all([cargarDatos(repMes, repMes), q(sb.from('entregas').select('*').eq('mes', repMes))]);
+    const cerrado = state.cerrados.has(repMes);
+    const ids = new Set(d.reports.map(r => r.pubId));
+    const pend = d.pubs.filter(p => !ids.has(p.id));
+    const R = calcResumen(d.reports);
+    const tardios = d.raw.filter(r => r.tardio);
+    const grupoIds = [...new Set([...d.grupos.map(g => g.id), ...d.pubs.map(p => p.grupo_id)])];
+    const filasGrupo = grupoIds.map(gid => {
+      const miembros = d.pubs.filter(p => p.grupo_id === gid);
+      if (!miembros.length && gid !== null) return '';
+      const rec = miembros.filter(p => ids.has(p.id)).length;
+      const e = ents.find(x => x.grupo_id === gid);
+      const st = e?.estado === 'entregado' ? '<span class="st ok">📤 Entregado</span>'
+        : e?.estado === 'devuelto' ? '<span class="st bad">↩️ Devuelto</span>' : '<span class="st pend">En curso</span>';
+      return `<div class="li">
+        <div><div class="nm">${esc(d.gn[gid] || 'Sin grupo')}</div>
+          <div class="sub">${st} · ${rec}/${miembros.length} informes${e?.entregado_at ? ' · ' + fechaCorta(e.entregado_at) : ''}${e?.nota ? ` · 💬 ${esc(e.nota)}` : ''}</div></div>
+        <div class="acts">
+          ${gid !== null ? `<button class="btn sec sm" data-ver="${gid}">Ver</button>` : ''}
+          ${e?.estado === 'entregado' && !cerrado ? `<button class="btn danger sm" data-dev="${gid}">Devolver</button>` : ''}
+        </div></div>`;
+    }).join('');
+
+    $('#iRes').innerHTML = `
+      ${cerrado ? `<div class="notice info">🔒 ${mesLabel(repMes)} está cerrado.</div>` : ''}
+      <div class="card"><div class="stats">
+        <div class="stat"><b>${d.reports.length}/${d.pubs.length}</b><span>Informes</span></div>
+        <div class="stat"><b>${pend.length}</b><span>Pendientes</span></div>
+        <div class="stat"><b>${R.cursos}</b><span>Cursos bíblicos</span></div>
+      </div></div>
+
+      <div class="section-title">Grupos</div>
+      <div class="card">${filasGrupo || '<div class="empty">Sin grupos.</div>'}</div>
+
+      <div class="section-title">Resumen para la sucursal</div>
+      <div class="card table-wrap"><table>
+        <tr><th></th><th class="n">Informes</th><th class="n">Cursos</th><th class="n">Horas</th></tr>
+        <tr><td>Publicadores</td><td class="n">${R.pub[0]}</td><td class="n">${R.pub[1]}</td><td class="n">—</td></tr>
+        <tr><td>Precursores auxiliares</td><td class="n">${R.aux[0]}</td><td class="n">${R.aux[1]}</td><td class="n">${R.aux[2]}</td></tr>
+        <tr><td>Precursores regulares</td><td class="n">${R.reg[0]}</td><td class="n">${R.reg[1]}</td><td class="n">${R.reg[2]}</td></tr>
+      </table>
+      <div class="row">
+        <button class="btn sec sm" id="iXlsMes">📊 Excel del mes</button>
+        <button class="btn sec sm" id="iXlsAnio">📅 Excel año de servicio</button>
+      </div></div>
+
+      ${tardios.length ? `<div class="section-title">Informes tardíos</div><div class="card">
+        ${tardios.map(r => `<div class="li"><div><div class="nm">${esc(d.byId[r.publicador_id]?.nombre || '')}</div>
+          <div class="sub">${chipInforme(r)} · ${fechaCorta(r.actualizado)}</div></div></div>`).join('')}</div>` : ''}
+
+      <div class="row" style="justify-content:center;margin-top:18px">
+        ${cerrado ? '<button class="btn ghost" id="iReabrir">🔓 Reabrir mes</button>'
+          : `<button class="btn" id="iCerrar">🔒 Cerrar ${mesLabel(repMes)}</button>`}
+      </div>`;
+
+    document.querySelectorAll('[data-ver]').forEach(b => b.onclick = () => { grpId = +b.dataset.ver; grpMes = repMes; show('grupo'); });
+    document.querySelectorAll('[data-dev]').forEach(b => b.onclick = async () => {
+      const nota = prompt('Motivo para el superintendente (p. ej. "falta el de Pedro"):');
+      if (nota === null) return;
+      try { await q(sb.rpc('devolver_grupo', { p_mes: repMes, p_grupo: +b.dataset.dev, p_nota: nota })); toast('Devuelto al grupo'); adminInformes(); }
+      catch (e) { toast('⚠️ ' + e.message); }
+    });
+    const run = (btn, fn) => async () => { const done = busy(btn, 'Generando…'); try { await fn(); } catch (e) { toast('⚠️ ' + e.message); } done(); };
+    $('#iXlsMes').onclick = run($('#iXlsMes'), () => exportMes(d.pubs, d.reports, pend, repMes));
+    $('#iXlsAnio').onclick = run($('#iXlsAnio'), () => exportAnio(repMes, async (desde, hasta) => cargarDatos(desde, hasta)));
+    if ($('#iCerrar')) $('#iCerrar').onclick = async () => {
+      if (!confirm(`¿Cerrar ${mesLabel(repMes)}?\n\nLos hermanos ya no podrán cambiar sus informes de ese mes. Los que falten podrán enviarlo, pero quedará marcado como tardío.`)) return;
+      try { await q(sb.rpc('cerrar_mes', { p_mes: repMes })); state.cerrados.add(repMes); toast('🔒 Mes cerrado'); adminInformes(); }
+      catch (e) { toast('⚠️ ' + e.message); }
+    };
+    if ($('#iReabrir')) $('#iReabrir').onclick = async () => {
+      try { await q(sb.rpc('reabrir_mes', { p_mes: repMes })); state.cerrados.delete(repMes); toast('🔓 Mes reabierto'); adminInformes(); }
+      catch (e) { toast('⚠️ ' + e.message); }
+    };
+  } catch (e) { $('#iRes').innerHTML = `<div class="empty">⚠️ ${esc(e.message)}</div>`; }
+}
+
+/* Publicadores y grupos */
+const PUB_COLS = 'id,nombre,grupo_id,precursor,rol,telefono,activo,tiene_enlace';
+function rolOptions(sel) {
+  const roles = ['publicador', 'auxiliar', 'superintendente', 'secretario', ...(state.me.rol === 'admin' ? ['admin'] : [])];
+  return roles.map(r => `<option value="${r}" ${r === sel ? 'selected' : ''}>${ROLES[r]}</option>`).join('');
+}
+const grupoOptions = (grupos, sel) => '<option value="">Sin grupo</option>' +
+  grupos.map(g => `<option value="${g.id}" ${g.id === sel ? 'selected' : ''}>${esc(g.nombre)}</option>`).join('');
+
+async function adminPublicadores() {
+  $('#aBody').innerHTML = SPIN;
+  let grupos, pubs;
+  try {
+    [grupos, pubs] = await Promise.all([
+      q(sb.from('grupos').select('id,nombre').order('nombre')),
+      q(sb.from('publicadores').select(PUB_COLS).eq('activo', true).order('nombre'))
+    ]);
+    state.grupos = grupos;
+  } catch (e) { $('#aBody').innerHTML = `<div class="empty">⚠️ ${esc(e.message)}</div>`; return; }
+
+  const porGrupo = [...grupos.map(g => [g.id, g.nombre]), [null, 'Sin grupo']]
+    .map(([gid, nombre]) => [nombre, pubs.filter(p => p.grupo_id === gid)]).filter(([, l]) => l.length);
+  const sinEnlace = pubs.filter(p => !p.tiene_enlace).length;
+
+  $('#aBody').innerHTML = `
+    <div class="card"><h3>Añadir publicador</h3>
+      <label for="nNom">Nombre</label><input id="nNom" maxlength="100">
+      <div class="grid2">
+        <div><label for="nGru">Grupo</label><select id="nGru">${grupoOptions(grupos, grupos[0]?.id)}</select></div>
+        <div><label for="nTel">Teléfono (WhatsApp)</label><input id="nTel" type="tel" inputmode="tel" placeholder="600 000 000"></div>
+      </div>
+      <label for="nRol">Función</label><select id="nRol">${rolOptions('publicador')}</select>
+      <label class="check"><input type="checkbox" id="nPr"> Precursor regular</label>
+      <div class="row"><button class="btn" id="nGo">Añadir</button><button class="btn ghost sm" id="nGrupo">＋ Nuevo grupo</button></div>
+      <details style="margin-top:14px"><summary style="cursor:pointer;color:var(--muted)">Importar varios de golpe</summary>
+        <label for="nBulk">Uno por línea: <code>Nombre;Grupo;PR;Teléfono</code> (PR y teléfono opcionales; los grupos que no existan se crean)</label>
+        <textarea id="nBulk" placeholder="Juan Pérez;Grupo 1;;600111222&#10;Ana López;Grupo 1;PR;600333444"></textarea>
+        <div class="row"><button class="btn sec" id="nImp">Importar</button></div>
+      </details>
+    </div>
+    ${sinEnlace ? `<div class="notice warn">${sinEnlace} ${sinEnlace === 1 ? 'hermano no tiene' : 'hermanos no tienen'} enlace todavía. Pulsa 🔗 para crearlo y enviarlo.</div>` : ''}
+    ${porGrupo.map(([nombre, l]) => `
+      <div class="section-title">${esc(nombre)} · ${l.length}</div>
+      <div class="card">${l.map(p => `
+        <div class="li">
+          <div style="min-width:0"><div class="nm">${esc(p.nombre)} ${p.precursor ? '<span class="pill">PR</span>' : ''}
+            ${p.rol !== 'publicador' ? `<span class="pill">${ROLES[p.rol]}</span>` : ''}</div>
+            <div class="sub">${p.tiene_enlace ? '🔗 Con enlace' : '<span class="st pend">Sin enlace</span>'}${p.telefono ? ' · ' + esc(p.telefono) : ''}</div></div>
+          <div class="acts">
+            <button class="btn sec icon" title="Enlace personal" data-lnk="${p.id}">🔗</button>
+            <button class="btn ghost icon" title="Editar" data-edit="${p.id}">✏️</button>
+          </div>
+        </div>`).join('')}</div>`).join('')}`;
+
+  $('#nGo').onclick = async e => {
+    const nombre = $('#nNom').value.trim();
+    if (!nombre) return toast('Falta el nombre');
+    const done = busy(e.target, 'Añadiendo…');
+    try {
+      const p = await q(sb.from('publicadores').insert({
+        nombre, grupo_id: +$('#nGru').value || null, telefono: $('#nTel').value.trim() || null,
+        rol: $('#nRol').value, precursor: $('#nPr').checked
+      }).select(PUB_COLS).single());
+      toast(`✓ ${p.nombre} añadido`);
+      adminPublicadores();
+    } catch (err) { toast('⚠️ ' + err.message); done(); }
+  };
+  $('#nGrupo').onclick = async () => {
+    const nombre = (prompt('Nombre del nuevo grupo:') || '').trim();
+    if (!nombre) return;
+    try { await q(sb.from('grupos').insert({ nombre })); state.grupos = []; adminPublicadores(); }
+    catch (e) { toast('⚠️ ' + e.message); }
+  };
+  $('#nImp').onclick = async e => {
+    const filas = $('#nBulk').value.split('\n').map(l => l.split(';').map(s => s.trim())).filter(a => a[0]);
+    if (!filas.length) return;
+    const done = busy(e.target, 'Importando…');
+    try {
+      const nuevos = [...new Set(filas.map(f => f[1]).filter(Boolean))].filter(n => !grupos.some(g => g.nombre === n));
+      if (nuevos.length) grupos.push(...await q(sb.from('grupos').insert(nuevos.map(nombre => ({ nombre }))).select('id,nombre')));
+      const existentes = new Set(pubs.map(p => p.nombre.toLowerCase()));
+      const rows = filas.filter(f => !existentes.has(f[0].toLowerCase())).map(([nombre, g, pr, tel]) => ({
+        nombre, grupo_id: grupos.find(x => x.nombre === g)?.id || null,
+        precursor: /^pr$/i.test(pr || ''), telefono: tel || null
+      }));
+      if (rows.length) await q(sb.from('publicadores').insert(rows));
+      toast(`✓ ${rows.length} añadidos${filas.length - rows.length ? `, ${filas.length - rows.length} ya existían` : ''}`);
+      state.grupos = [];
+      adminPublicadores();
+    } catch (err) { toast('⚠️ ' + err.message); done(); }
+  };
+  document.querySelectorAll('[data-lnk]').forEach(b => b.onclick = () => crearEnlace(pubs.find(p => p.id === b.dataset.lnk)));
+  document.querySelectorAll('[data-edit]').forEach(b => b.onclick = () => editarPublicador(pubs.find(p => p.id === b.dataset.edit), grupos));
+}
+
+function editarPublicador(p, grupos) {
+  const s = modal(`
+    <h3>Editar publicador</h3>
+    <label>Nombre</label><input id="eNom" value="${esc(p.nombre)}" maxlength="100">
+    <div class="grid2">
+      <div><label>Grupo</label><select id="eGru">${grupoOptions(grupos, p.grupo_id)}</select></div>
+      <div><label>Teléfono</label><input id="eTel" type="tel" value="${esc(p.telefono || '')}"></div>
+    </div>
+    <label>Función</label><select id="eRol">${rolOptions(p.rol)}</select>
+    <label class="check"><input type="checkbox" id="ePr" ${p.precursor ? 'checked' : ''}> Precursor regular</label>
+    <div class="row"><button class="btn" id="eSave">Guardar</button><button class="btn danger" id="eBaja">Dar de baja</button></div>`);
+  s.querySelector('#eSave').onclick = async () => {
+    try {
+      await q(sb.from('publicadores').update({
+        nombre: s.querySelector('#eNom').value.trim(), grupo_id: +s.querySelector('#eGru').value || null,
+        telefono: s.querySelector('#eTel').value.trim() || null, rol: s.querySelector('#eRol').value,
+        precursor: s.querySelector('#ePr').checked
+      }).eq('id', p.id).select('id').single());
+      closeModal(); toast('✓ Guardado'); adminPublicadores();
+    } catch (e) { toast('⚠️ ' + e.message); }
+  };
+  s.querySelector('#eBaja').onclick = async () => {
+    if (!confirm(`¿Dar de baja a ${p.nombre}?\n\nSu enlace dejará de funcionar al momento. Sus informes anteriores se conservan.`)) return;
+    try { await q(sb.from('publicadores').update({ activo: false }).eq('id', p.id).select('id').single()); closeModal(); toast('Dado de baja'); adminPublicadores(); }
+    catch (e) { toast('⚠️ ' + e.message); }
+  };
+}
+
+/* ─────────── Exportar a Excel ─────────── */
+function loadXLSX() {
+  if (window.XLSX) return Promise.resolve();
+  return new Promise((res, rej) => {
+    const s = document.createElement('script');
+    s.src = 'https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js';
+    s.onload = res; s.onerror = () => rej(new Error('No se pudo cargar la librería de Excel'));
+    document.head.appendChild(s);
+  });
+}
+const XS = {
+  title: { font: { bold: true, sz: 14, color: { rgb: '1F4E79' } } },
+  head: { font: { bold: true, color: { rgb: 'FFFFFF' } }, fill: { fgColor: { rgb: '1F4E79' } },
+          alignment: { vertical: 'center', wrapText: true } },
+  total: { font: { bold: true }, fill: { fgColor: { rgb: 'E6EEF7' } } },
+  pend: { font: { italic: true, color: { rgb: 'B36B00' } }, fill: { fgColor: { rgb: 'FFF2DC' } } }
+};
+const tipoPub = r => r.regular === 'si' ? 'Precursor regular' : r.auxiliar === 'si' ? 'Precursor auxiliar' : 'Publicador';
+const byGrupoNombre = (a, b) => ((a.grupo || '') + a.nombre).localeCompare((b.grupo || '') + b.nombre, 'es');
+
+function calcResumen(reports) {
+  const yes = reports.filter(r => r.participo === 'si');
+  const sum = (a, k) => a.reduce((t, r) => t + num(r[k]), 0);
+  const pub = yes.filter(r => r.regular !== 'si' && r.auxiliar !== 'si');
+  const aux = yes.filter(r => r.auxiliar === 'si');
+  const reg = yes.filter(r => r.regular === 'si');
+  return {
+    pub: [pub.length, sum(pub, 'cursos')],
+    aux: [aux.length, sum(aux, 'cursos'), sum(aux, 'horas')],
+    reg: [reg.length, sum(reg, 'cursos'), sum(reg, 'horas')],
+    cursos: sum(yes, 'cursos')
+  };
+}
+
+function makeSheet(rows, { widths = [], head = [], rowStyles = {}, filterFrom = null, title = true } = {}) {
+  const ws = XLSX.utils.aoa_to_sheet(rows);
+  ws['!cols'] = widths.map(w => ({ wch: w }));
+  const R = XLSX.utils.decode_range(ws['!ref']);
+  for (let r = R.s.r; r <= R.e.r; r++) {
+    const st = head.includes(r) ? XS.head : rowStyles[r];
+    if (!st) continue;
+    for (let c = R.s.c; c <= R.e.c; c++) {
+      const a = XLSX.utils.encode_cell({ r, c });
+      if (!ws[a]) ws[a] = { t: 's', v: '' };
+      ws[a].s = st;
+    }
+  }
+  if (title && ws.A1) ws.A1.s = XS.title;
+  if (filterFrom !== null) ws['!autofilter'] = { ref: XLSX.utils.encode_range({ s: { r: filterFrom, c: 0 }, e: { r: R.e.r, c: R.e.c } }) };
+  return ws;
+}
+
+async function exportMes(ps, reports, pend, mes, sufijo = '') {
+  await loadXLSX();
+  const R = calcResumen(reports);
+  const grupos = [...new Set(ps.map(p => p.grupo || 'Sin grupo'))].sort((a, b) => a.localeCompare(b, 'es'));
+  const repIds = new Set(reports.map(r => r.pubId));
+
+  const res = [
+    [`Informes de ${mesLabel(mes)}${sufijo} — ${CONGREGACION}`], [],
+    ['Categoría', 'Informes', 'Cursos bíblicos', 'Horas'],
+    ['Publicadores', R.pub[0], R.pub[1], ''],
+    ['Precursores auxiliares', ...R.aux],
+    ['Precursores regulares', ...R.reg],
+    ['Total', R.pub[0] + R.aux[0] + R.reg[0], R.cursos, R.aux[2] + R.reg[2]],
+    [],
+    ['Por grupo', 'Recibidos', 'Publicadores', 'Pendientes']
+  ];
+  const grupoHead = res.length - 1;
+  grupos.forEach(g => {
+    const miembros = ps.filter(p => (p.grupo || 'Sin grupo') === g);
+    const rec = miembros.filter(p => repIds.has(p.id)).length;
+    res.push([g, rec, miembros.length, miembros.length - rec]);
+  });
+  res.push(['Total', reports.length, ps.length, pend.length]);
+  const wsRes = makeSheet(res, { widths: [26, 12, 16, 12], head: [2, grupoHead],
+    rowStyles: { 6: XS.total, [res.length - 1]: XS.total } });
+
+  const det = [['Grupo', 'Nombre', 'Tipo', 'Participó', 'Cursos bíblicos', 'Horas', 'Comentarios', 'Enviado']];
+  const detStyles = {};
+  const todosGrupos = [...new Set([...grupos, ...reports.map(r => r.grupo || 'Sin grupo')])];
+  todosGrupos.forEach(g => {
+    reports.filter(r => (r.grupo || 'Sin grupo') === g).sort(byGrupoNombre).forEach(r => {
+      const pionero = r.regular === 'si' || r.auxiliar === 'si';
+      det.push([g, r.nombre, tipoPub(r), r.participo === 'si' ? 'Sí' : 'No', num(r.cursos),
+        pionero ? num(r.horas) : '', r.comentarios || '',
+        r.actualizado ? new Date(r.actualizado).toLocaleDateString('es-ES') : '']);
+    });
+    pend.filter(p => (p.grupo || 'Sin grupo') === g).sort(byGrupoNombre).forEach(p => {
+      detStyles[det.length] = XS.pend;
+      det.push([g, p.nombre, p.precursor === 'si' ? 'Precursor regular' : '', 'PENDIENTE', '', '', '', '']);
+    });
+  });
+  const wsDet = makeSheet(det, { widths: [14, 28, 18, 11, 14, 8, 40, 12], head: [0], rowStyles: detStyles, filterFrom: 0, title: false });
+
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, wsRes, 'Resumen');
+  XLSX.utils.book_append_sheet(wb, wsDet, 'Detalle');
+  XLSX.writeFile(wb, `Informes ${mesLabel(mes)}${sufijo}.xlsx`);
+}
+
+/** loader(desde, hasta) → { pubs, reports } en el formato de cargarDatos */
+async function exportAnio(mes, loader) {
+  const [y, m] = mes.split('-').map(Number);
+  const startY = m >= 9 ? y : y - 1; // el año de servicio va de septiembre a agosto
+  const meses = Array.from({ length: 12 }, (_, i) => {
+    const mm = (8 + i) % 12 + 1;
+    return `${mm >= 9 ? startY : startY + 1}-${String(mm).padStart(2, '0')}`;
+  });
+  const [{ pubs: ps, reports }] = await Promise.all([loader(meses[0], meses[11]), loadXLSX()]);
+  const corto = mm => MESES[+mm.slice(5) - 1].slice(0, 3);
+
+  const res = [[`Año de servicio ${startY}-${startY + 1} — ${CONGREGACION}`], [],
+    ['Mes', 'Informes', 'Publicadores', 'Cursos publ.', 'Prec. auxiliares', 'Horas aux.', 'Prec. regulares', 'Horas reg.', 'Cursos total']];
+  const tot = Array(8).fill(0);
+  meses.forEach(mm => {
+    const rs = reports.filter(r => r.mes === mm);
+    const R = calcResumen(rs);
+    const fila = [rs.length, R.pub[0], R.pub[1], R.aux[0], R.aux[2], R.reg[0], R.reg[2], R.cursos];
+    fila.forEach((v, i) => { tot[i] += v; });
+    res.push([mesLabel(mm), ...(rs.length ? fila : Array(8).fill(''))]);
+  });
+  res.push(['Total', ...tot]);
+  const wsRes = makeSheet(res, { widths: [18, 10, 13, 12, 15, 11, 15, 11, 12], head: [2], rowStyles: { [res.length - 1]: XS.total } });
+
+  const idx = {};
+  reports.forEach(r => { idx[r.pubId + '|' + r.mes] = r; });
+  const personas = [...ps];
+  reports.forEach(r => {
+    if (!personas.some(p => p.id === r.pubId)) personas.push({ id: r.pubId, nombre: r.nombre + ' (baja)', grupo: r.grupo });
+  });
+  personas.sort(byGrupoNombre);
+  const pp = [['Grupo', 'Nombre', ...meses.map(corto), 'Meses informados', 'Cursos (total)', 'Horas (total)']];
+  personas.forEach(p => {
+    let n = 0, cursos = 0, horas = 0;
+    const celdas = meses.map(mm => {
+      const r = idx[p.id + '|' + mm];
+      if (!r) return '';
+      n++; cursos += num(r.cursos); horas += num(r.horas);
+      if (r.participo !== 'si') return 'No';
+      if (r.regular === 'si') return num(r.horas);
+      if (r.auxiliar === 'si') return num(r.horas) + ' A';
+      return '✓';
+    });
+    pp.push([p.grupo || '', p.nombre, ...celdas, n, cursos, horas || '']);
+  });
+  const wsPP = makeSheet(pp, { widths: [12, 26, ...Array(12).fill(6), 10, 10, 10], head: [0], filterFrom: 0, title: false });
+
+  const reg = [['Nombre', 'Grupo', 'Mes', 'Tipo', 'Participó', 'Cursos bíblicos', 'Horas', 'Comentarios']];
+  reports.slice().sort((a, b) => a.nombre.localeCompare(b.nombre, 'es') || a.mes.localeCompare(b.mes)).forEach(r => {
+    reg.push([r.nombre, r.grupo, mesLabel(r.mes), tipoPub(r), r.participo === 'si' ? 'Sí' : 'No', num(r.cursos),
+      (r.regular === 'si' || r.auxiliar === 'si') ? num(r.horas) : '', r.comentarios || '']);
+  });
+  const wsReg = makeSheet(reg, { widths: [26, 12, 16, 18, 10, 14, 8, 40], head: [0], filterFrom: 0, title: false });
+
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, wsRes, 'Resumen anual');
+  XLSX.utils.book_append_sheet(wb, wsPP, 'Por publicador');
+  XLSX.utils.book_append_sheet(wb, wsReg, 'Registro');
+  XLSX.writeFile(wb, `Informes año de servicio ${startY}-${startY + 1}.xlsx`);
+}
+
+boot();
+</script>
+</body>
+</html>
