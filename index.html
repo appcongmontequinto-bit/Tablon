@@ -66,12 +66,19 @@
     padding: 4px 10px; border-radius: 8px; font-size: .85rem; font-weight: 600; margin-top: 6px; }
   .thumb { display: block; width: 100%; max-height: 420px; object-fit: contain; background: var(--bg);
     border-radius: 10px; margin-top: 10px; cursor: zoom-in; border: 1px solid var(--line); }
-  .pdfbox { margin-top: 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--bg);
-    padding: 8px; max-height: 75vh; overflow-y: auto; -webkit-overflow-scrolling: touch; }
-  .pdfbox canvas { display: block; width: 100%; height: auto; background: #fff; border-radius: 4px;
-    box-shadow: var(--shadow); margin: 0 auto 8px; }
-  .pdfbox .pdfpie { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap;
-    font-size: .85rem; color: var(--muted); }
+  #pdfv { position: fixed; inset: 0; z-index: 45; background: #2b2f36; display: flex; flex-direction: column; }
+  #pdfv[hidden] { display: none !important; }
+  #pdfv header { display: flex; align-items: center; gap: 8px; padding: 8px 10px; padding-top: calc(8px + env(safe-area-inset-top));
+    background: #1c2029; color: #fff; }
+  #pdfv header .t { flex: 1; min-width: 0; line-height: 1.2; }
+  #pdfv header .t b { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #pdfv header .t small { color: #aab3bf; }
+  #pdfv header button, #pdfv header a { min-width: 44px; height: 44px; border-radius: 10px; border: 0; background: #343a46;
+    color: #fff; font-size: 1.25rem; display: inline-flex; align-items: center; justify-content: center; text-decoration: none; cursor: pointer; }
+  #pdfv header .zoom { font-size: .85rem; color: #aab3bf; min-width: 42px; text-align: center; }
+  #pdfvBody { flex: 1; overflow: auto; -webkit-overflow-scrolling: touch; padding: 8px; }
+  #pdfvBody canvas { display: block; background: #fff; margin: 0 auto 10px; box-shadow: 0 2px 10px rgba(0,0,0,.4); }
+  #pdfvBody .empty { color: #dde3ea; }
   .row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; align-items: center; }
   .section-title { font-size: .8rem; text-transform: uppercase; letter-spacing: .06em; color: var(--muted);
     margin: 20px 0 8px; font-weight: 700; }
@@ -188,6 +195,17 @@
 
 <div id="toast"></div>
 <div id="viewer"><button class="btn sec sm" onclick="closeViewer()">Cerrar ✕</button><img alt=""></div>
+<div id="pdfv" hidden role="dialog" aria-modal="true" aria-label="Documento PDF">
+  <header>
+    <button id="pdfvX" title="Cerrar" aria-label="Cerrar">✕</button>
+    <div class="t"><b id="pdfvTit"></b><small id="pdfvInfo"></small></div>
+    <button id="pdfvMenos" title="Reducir" aria-label="Reducir">−</button>
+    <span class="zoom" id="pdfvZoom">100%</span>
+    <button id="pdfvMas" title="Ampliar" aria-label="Ampliar">+</button>
+    <a id="pdfvAbrir" target="_blank" rel="noopener" title="Abrir o descargar el original" aria-label="Abrir original">⤓</a>
+  </header>
+  <div id="pdfvBody"></div>
+</div>
 <div id="modal"><div class="sheet"></div></div>
 
 <script>
@@ -438,9 +456,8 @@ function itemCard(it, admin = false) {
   const media = url && isImg(it)
     ? `<img class="thumb" loading="lazy" src="${esc(url)}" alt="${esc(it.titulo)}" onclick="openViewer('${esc(it.archivo_path)}')">` : '';
   const fileBtn = !url ? '' : isPdf(it)
-    ? `<button class="btn sec sm pdfbtn" onclick="togglePdf(this, '${it.id}')">📄 Ver PDF ▾</button>`
+    ? `<button class="btn sm" onclick="verPdf('${it.id}')">📄 Ver PDF</button>`
     : `<a class="btn sec sm" href="${esc(url)}" target="_blank" rel="noopener">${isImg(it) ? '🔍 Abrir original' : '📎 Abrir archivo'}</a>`;
-  const pdfBox = url && isPdf(it) ? `<div class="pdfbox" hidden></div>` : '';
   const adminBtns = admin ? `
       <button class="btn sec sm" onclick="avisarGrupo('${it.id}')">📣 Avisar al grupo</button>
       <button class="btn ghost sm" onclick="pinItem('${it.id}')">${it.fijado ? '📍 Desfijar' : '📌 Fijar'}</button>
@@ -457,7 +474,6 @@ function itemCard(it, admin = false) {
       ${it.texto ? `<p class="texto">${linkify(esc(it.texto))}</p>` : ''}
       ${media}
       ${(fileBtn || adminBtns) ? `<div class="row">${fileBtn}${adminBtns}</div>` : ''}
-      ${pdfBox}
     </article>`;
 }
 function renderBoard() {
@@ -482,45 +498,74 @@ function loadPdfJs() {
     document.head.appendChild(s);
   });
 }
-async function togglePdf(el, id) {
-  const card = el.closest('article'), box = card.querySelector('.pdfbox'), btn = card.querySelector('.pdfbtn');
-  if (!box) return;
-  const abrir = box.hidden;
-  box.hidden = !abrir;
-  btn.textContent = abrir ? '📄 Ocultar PDF ▴' : '📄 Ver PDF ▾';
-  if (!abrir) { card.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); return; }
-  if (box.dataset.ok) return;
+/* Visor a pantalla completa: se cierra con ✕, con Escape o con el botón «atrás» del móvil */
+const pdfv = { doc: null, url: null, zoom: 1, gen: 0 };
+async function verPdf(id) {
   const it = state.items.find(i => i.id === id);
   const url = it && state.urls[it.archivo_path];
-  const pie = `<div class="pdfpie"><span class="pdfinfo"></span>
-      <span><a class="btn ghost sm" href="${esc(url)}" target="_blank" rel="noopener">🔍 Abrir a pantalla completa</a>
-      <button class="btn ghost sm" onclick="togglePdf(this, '${id}')">Ocultar ▴</button></span></div>`;
-  box.innerHTML = `<div class="pdfpags">${SPIN}</div>${pie}`;
+  if (!url) return toast('No se encuentra el archivo');
+  $('#pdfvTit').textContent = it.titulo;
+  $('#pdfvInfo').textContent = 'Cargando…';
+  $('#pdfvAbrir').href = url;
+  $('#pdfvBody').innerHTML = SPIN;
+  $('#pdfv').hidden = false;
+  document.body.style.overflow = 'hidden';
+  history.pushState({ pdf: 1 }, '');
+  pdfv.zoom = 1;
   try {
-    const lib = await loadPdfJs();
-    const doc = await lib.getDocument({ url, isEvalSupported: false }).promise;
-    const pags = box.querySelector('.pdfpags');
-    pags.innerHTML = '';
-    box.dataset.ok = '1';
-    box.querySelector('.pdfinfo').textContent = doc.numPages === 1 ? '1 página' : `${doc.numPages} páginas`;
-    const ancho = Math.max(280, box.clientWidth - 16);
-    const dpr = Math.min(window.devicePixelRatio || 1, 2);
-    for (let n = 1; n <= doc.numPages; n++) {
-      const page = await doc.getPage(n);
-      const vp1 = page.getViewport({ scale: 1 });
-      const vp = page.getViewport({ scale: (ancho / vp1.width) * dpr });
-      const c = document.createElement('canvas');
-      c.width = Math.floor(vp.width); c.height = Math.floor(vp.height);
-      c.setAttribute('aria-label', `Página ${n}`);
-      pags.appendChild(c);
-      await page.render({ canvasContext: c.getContext('2d'), viewport: vp }).promise;
+    if (pdfv.url !== url) {
+      const lib = await loadPdfJs();
+      pdfv.doc = await lib.getDocument({ url, isEvalSupported: false }).promise;
+      pdfv.url = url;
     }
+    $('#pdfvInfo').textContent = pdfv.doc.numPages === 1 ? '1 página' : `${pdfv.doc.numPages} páginas`;
+    await pintarPdf();
   } catch (e) {
-    delete box.dataset.ok;
-    box.querySelector('.pdfpags').innerHTML = `<div class="empty">⚠️ No se pudo mostrar aquí (${esc(e.message)}). Usa «Abrir a pantalla completa».</div>`;
+    pdfv.url = null;
+    $('#pdfvInfo').textContent = '';
+    $('#pdfvBody').innerHTML = `<div class="empty">⚠️ No se pudo mostrar el PDF (${esc(e.message)}).<br>Pulsa ⤓ arriba para abrirlo.</div>`;
   }
 }
-$('#viewer').onclick = e => { if (e.target.id === 'viewer') closeViewer(); };
+async function pintarPdf() {
+  const gen = ++pdfv.gen, body = $('#pdfvBody'), doc = pdfv.doc;
+  if (!doc || $('#pdfv').hidden) return;
+  $('#pdfvZoom').textContent = Math.round(pdfv.zoom * 100) + '%';
+  const ancho = Math.min(body.clientWidth - 16, 1100) * pdfv.zoom;
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  body.innerHTML = '';
+  for (let n = 1; n <= doc.numPages; n++) {
+    const page = await doc.getPage(n);
+    if (gen !== pdfv.gen) return;   // se cambió el zoom o se cerró mientras dibujaba
+    const vp1 = page.getViewport({ scale: 1 });
+    const esc1 = ancho / vp1.width;
+    const vp = page.getViewport({ scale: esc1 * dpr });
+    const c = document.createElement('canvas');
+    c.width = Math.floor(vp.width); c.height = Math.floor(vp.height);
+    c.style.width = Math.floor(vp1.width * esc1) + 'px'; c.style.height = Math.floor(vp1.height * esc1) + 'px';
+    c.setAttribute('aria-label', `Página ${n}`);
+    body.appendChild(c);
+    await page.render({ canvasContext: c.getContext('2d'), viewport: vp }).promise;
+  }
+}
+function zoomPdf(f) {
+  const body = $('#pdfvBody');
+  const rel = body.scrollHeight ? body.scrollTop / body.scrollHeight : 0;
+  pdfv.zoom = Math.min(3, Math.max(1, Math.round(pdfv.zoom * f * 4) / 4));
+  pintarPdf().then(() => { body.scrollTop = rel * body.scrollHeight; });
+}
+function cerrarPdf(desdeAtras) {
+  if ($('#pdfv').hidden) return;
+  pdfv.gen++;
+  $('#pdfv').hidden = true;
+  $('#pdfvBody').innerHTML = '';
+  document.body.style.overflow = '';
+  if (!desdeAtras && history.state?.pdf) history.back();
+}
+$('#pdfvX').onclick = () => cerrarPdf(false);
+$('#pdfvMas').onclick = () => zoomPdf(1.5);
+$('#pdfvMenos').onclick = () => zoomPdf(1 / 1.5);
+window.addEventListener('popstate', () => cerrarPdf(true));
+document.addEventListener('keydown', e => { if (e.key === 'Escape') cerrarPdf(false); });
 
 /* ─────────── Formulario de informe (propio o en nombre de otro) ─────────── */
 /** o = { pub:{id,nombre,precursor}, mes, existente, propio, onSaved } */
