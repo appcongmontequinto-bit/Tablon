@@ -625,9 +625,11 @@ function isPast(it) {
   const d = new Date(it.fecha_evento); d.setHours(23, 59, 59);
   return d < new Date();
 }
+const PRIO_FIJADO = { anuncio: 0, actividad: 1, cuadrante: 2 };
 function sortItems(list) {
   return list.slice().sort((a, b) => {
     if (a.fijado !== b.fijado) return a.fijado ? -1 : 1;
+    if (a.fijado && a.tipo !== b.tipo) return (PRIO_FIJADO[a.tipo] ?? 9) - (PRIO_FIJADO[b.tipo] ?? 9);   // fijados: anuncios arriba
     const pa = isPast(a), pb = isPast(b);
     if (pa !== pb) return pa ? 1 : -1;
     if (a.tipo === 'actividad' && b.tipo === 'actividad' && !pa && a.fecha_evento && b.fecha_evento)
