@@ -66,6 +66,12 @@
     padding: 4px 10px; border-radius: 8px; font-size: .85rem; font-weight: 600; margin-top: 6px; }
   .thumb { display: block; width: 100%; max-height: 420px; object-fit: contain; background: var(--bg);
     border-radius: 10px; margin-top: 10px; cursor: zoom-in; border: 1px solid var(--line); }
+  .pdfbox { margin-top: 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--bg);
+    padding: 8px; max-height: 75vh; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+  .pdfbox canvas { display: block; width: 100%; height: auto; background: #fff; border-radius: 4px;
+    box-shadow: var(--shadow); margin: 0 auto 8px; }
+  .pdfbox .pdfpie { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap;
+    font-size: .85rem; color: var(--muted); }
   .row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; align-items: center; }
   .section-title { font-size: .8rem; text-transform: uppercase; letter-spacing: .06em; color: var(--muted);
     margin: 20px 0 8px; font-weight: 700; }
@@ -431,8 +437,10 @@ function itemCard(it, admin = false) {
   const url = it.archivo_path ? state.urls[it.archivo_path] : null;
   const media = url && isImg(it)
     ? `<img class="thumb" loading="lazy" src="${esc(url)}" alt="${esc(it.titulo)}" onclick="openViewer('${esc(it.archivo_path)}')">` : '';
-  const fileBtn = url ? `<a class="btn sec sm" href="${esc(url)}" target="_blank" rel="noopener">
-      ${isPdf(it) ? '📄 Ver PDF' : isImg(it) ? '🔍 Abrir original' : '📎 Abrir archivo'}</a>` : '';
+  const fileBtn = !url ? '' : isPdf(it)
+    ? `<button class="btn sec sm pdfbtn" onclick="togglePdf(this, '${it.id}')">📄 Ver PDF ▾</button>`
+    : `<a class="btn sec sm" href="${esc(url)}" target="_blank" rel="noopener">${isImg(it) ? '🔍 Abrir original' : '📎 Abrir archivo'}</a>`;
+  const pdfBox = url && isPdf(it) ? `<div class="pdfbox" hidden></div>` : '';
   const adminBtns = admin ? `
       <button class="btn sec sm" onclick="avisarGrupo('${it.id}')">📣 Avisar al grupo</button>
       <button class="btn ghost sm" onclick="pinItem('${it.id}')">${it.fijado ? '📍 Desfijar' : '📌 Fijar'}</button>
@@ -449,6 +457,7 @@ function itemCard(it, admin = false) {
       ${it.texto ? `<p class="texto">${linkify(esc(it.texto))}</p>` : ''}
       ${media}
       ${(fileBtn || adminBtns) ? `<div class="row">${fileBtn}${adminBtns}</div>` : ''}
+      ${pdfBox}
     </article>`;
 }
 function renderBoard() {
@@ -459,6 +468,58 @@ function renderBoard() {
 }
 function openViewer(path) { const v = $('#viewer'); v.querySelector('img').src = state.urls[path]; v.classList.add('on'); }
 function closeViewer() { $('#viewer').classList.remove('on'); }
+
+/* ─────────── PDF desplegable dentro de la tarjeta (PDF.js: funciona también en Android) ─────────── */
+const PDFJS = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/';
+let pdfjsCarga = null;
+function loadPdfJs() {
+  if (window.pdfjsLib) return Promise.resolve(window.pdfjsLib);
+  return pdfjsCarga ||= new Promise((res, rej) => {
+    const s = document.createElement('script');
+    s.src = PDFJS + 'pdf.min.js';
+    s.onload = () => { window.pdfjsLib.GlobalWorkerOptions.workerSrc = PDFJS + 'pdf.worker.min.js'; res(window.pdfjsLib); };
+    s.onerror = () => { pdfjsCarga = null; rej(new Error('No se pudo cargar el visor de PDF')); };
+    document.head.appendChild(s);
+  });
+}
+async function togglePdf(el, id) {
+  const card = el.closest('article'), box = card.querySelector('.pdfbox'), btn = card.querySelector('.pdfbtn');
+  if (!box) return;
+  const abrir = box.hidden;
+  box.hidden = !abrir;
+  btn.textContent = abrir ? '📄 Ocultar PDF ▴' : '📄 Ver PDF ▾';
+  if (!abrir) { card.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); return; }
+  if (box.dataset.ok) return;
+  const it = state.items.find(i => i.id === id);
+  const url = it && state.urls[it.archivo_path];
+  const pie = `<div class="pdfpie"><span class="pdfinfo"></span>
+      <span><a class="btn ghost sm" href="${esc(url)}" target="_blank" rel="noopener">🔍 Abrir a pantalla completa</a>
+      <button class="btn ghost sm" onclick="togglePdf(this, '${id}')">Ocultar ▴</button></span></div>`;
+  box.innerHTML = `<div class="pdfpags">${SPIN}</div>${pie}`;
+  try {
+    const lib = await loadPdfJs();
+    const doc = await lib.getDocument({ url, isEvalSupported: false }).promise;
+    const pags = box.querySelector('.pdfpags');
+    pags.innerHTML = '';
+    box.dataset.ok = '1';
+    box.querySelector('.pdfinfo').textContent = doc.numPages === 1 ? '1 página' : `${doc.numPages} páginas`;
+    const ancho = Math.max(280, box.clientWidth - 16);
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    for (let n = 1; n <= doc.numPages; n++) {
+      const page = await doc.getPage(n);
+      const vp1 = page.getViewport({ scale: 1 });
+      const vp = page.getViewport({ scale: (ancho / vp1.width) * dpr });
+      const c = document.createElement('canvas');
+      c.width = Math.floor(vp.width); c.height = Math.floor(vp.height);
+      c.setAttribute('aria-label', `Página ${n}`);
+      pags.appendChild(c);
+      await page.render({ canvasContext: c.getContext('2d'), viewport: vp }).promise;
+    }
+  } catch (e) {
+    delete box.dataset.ok;
+    box.querySelector('.pdfpags').innerHTML = `<div class="empty">⚠️ No se pudo mostrar aquí (${esc(e.message)}). Usa «Abrir a pantalla completa».</div>`;
+  }
+}
 $('#viewer').onclick = e => { if (e.target.id === 'viewer') closeViewer(); };
 
 /* ─────────── Formulario de informe (propio o en nombre de otro) ─────────── */
