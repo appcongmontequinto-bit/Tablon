@@ -296,6 +296,7 @@ const puedeGestionarA = m => esAdmin() || (esSuper() && !['secretario', 'admin']
 const puedePublicar = () => state.me?.rol === 'admin';
 const esModoGrupo = () => state.modo === 'grupo';
 const claveLlave = () => 'tablon_llave_' + GRUPO;
+const claveUltimo = () => 'tablon_ultimo_' + GRUPO;   // último nombre usado en este móvil (no da acceso: solo evita buscarlo en la lista)
 
 $('#congName').textContent = CONGREGACION;
 
@@ -407,6 +408,7 @@ async function boot() {
     $('#btnRefresh').hidden = false;
     document.querySelector('[data-v="grupo"]').hidden = !(esSuper() || esAdmin());   // el secretario ve los grupos desde Informes
     document.querySelector('[data-v="admin"]').hidden = !esGestor();
+    document.querySelector('[data-v="informe"]').hidden = esSecre();   // su informe lo envía con el enlace del grupo y su PIN
     if (esSecre()) {
       const b = document.querySelector('[data-v="admin"]');
       b.querySelector('.lb').textContent = 'Informes';
@@ -723,7 +725,7 @@ function pintarInforme(el, pub, mis, guardar) {
   if ($('#noSoy')) $('#noSoy').onclick = async e => {
     e.preventDefault();
     await sb.rpc('dispositivo_salir', { p_llave: state.llave }).catch(() => {});
-    store.del(claveLlave()); state.llave = null; state.dev = null;
+    store.del(claveLlave()); store.del(claveUltimo()); state.llave = null; state.dev = null; state.pend = null;
     renderInforme();
   };
   informeForm($('#infForm'), { pub, mes: infMes, existente: mis.find(r => r.mes === infMes), propio: true,
@@ -731,6 +733,10 @@ function pintarInforme(el, pub, mis, guardar) {
 }
 
 /* Mi informe desde el enlace del grupo: nombre + PIN la primera vez; luego el móvil lo recuerda */
+const enviarConLlave = row => q(sb.rpc('dispositivo_enviar', {
+  p_llave: state.llave, p_mes: row.mes, p_participo: row.participo, p_cursos: row.cursos,
+  p_horas: row.horas, p_auxiliar: row.auxiliar, p_comentarios: row.comentarios }));
+
 async function renderInformeGrupo() {
   const el = $('#v-informe');
   el.innerHTML = SPIN;
@@ -741,18 +747,29 @@ async function renderInformeGrupo() {
         state.dev = d.perfil;
         state.cerrados = new Set(d.cerrados || []);
         $('#hello').textContent = `${d.perfil.nombre} · ${d.perfil.grupo}`;
-        const guardar = row => q(sb.rpc('dispositivo_enviar', {
-          p_llave: state.llave, p_mes: row.mes, p_participo: row.participo, p_cursos: row.cursos,
-          p_horas: row.horas, p_auxiliar: row.auxiliar, p_comentarios: row.comentarios }));
+        const guardar = async row => {
+          try { return await enviarConLlave(row); }
+          catch (e) {
+            if (!/PIN_CADUCADO/.test(e.message)) throw e;
+            // pasó la hora mientras rellenaba: pide el PIN y, si es la misma persona, lo envía después
+            state.pend = { row, pubId: d.perfil.id };
+            store.del(claveLlave()); state.llave = null;
+            toast('Por seguridad, vuelve a poner tu PIN');
+            renderInformeGrupo();
+            throw new Error('Pon tu PIN para terminar de enviarlo');
+          }
+        };
         return pintarInforme(el, d.perfil, d.informes || [], guardar);
       }
-      store.del(claveLlave()); state.llave = null;   // llave anulada (PIN nuevo o baja)
+      store.del(claveLlave()); state.llave = null;   // pasó la hora, PIN nuevo o baja: se vuelve a pedir
     }
     const g = await q(sb.rpc('grupo_nombres', { p_codigo: GRUPO }));
+    const ultimo = g.nombres.find(n => n.id === store.get(claveUltimo()) && n.tiene_pin);
+    if (ultimo) return pantallaPin(el, ultimo);   // mismo móvil: directamente a su PIN (con «No soy …» para cambiar)
     el.innerHTML = `
       <div class="card">
         <h3>¿Quién eres?</h3>
-        <p class="muted">Solo te lo preguntaremos la primera vez en este móvil.</p>
+        <p class="muted">Elige tu nombre. Después te pediremos tu PIN.</p>
         ${g.nombres.map(n => `<button class="btn sec block" style="margin-top:8px;justify-content:flex-start"
             data-p="${n.id}">${esc(n.nombre)}${n.tiene_pin ? '' : ' <span class="muted" style="margin-left:auto;font-size:.85em">· primera vez</span>'}</button>`).join('') || '<div class="empty">No hay nombres en este grupo.</div>'}
       </div>`;
@@ -776,17 +793,23 @@ function pantallaPin(el, persona) {
       </div>
       <div class="row" style="justify-content:center"><button class="btn ghost sm" id="pinVolver">← No soy ${nom}</button></div>
     </div>`;
-  const msg = () => { $('#pinMsg').innerHTML = !crear ? 'Escribe tu PIN de 4 cifras'
+  const msg = () => { $('#pinMsg').innerHTML = !crear ? 'Escribe tu PIN de 4 cifras<br><small>Por seguridad se pide cada hora</small>'
     : primero === null ? '<b>Es tu primera vez.</b> Elige un PIN de 4 cifras que recuerdes fácilmente.'
     : 'Escríbelo otra vez para confirmarlo'; };
   const dots = () => { $('#pinDots').innerHTML = [0, 1, 2, 3].map(i =>
     `<span style="width:18px;height:18px;border-radius:50%;border:2px solid var(--text);background:${i < pin.length ? 'var(--text)' : 'transparent'}"></span>`).join(''); };
   const teclas = on => el.querySelectorAll('[data-k]').forEach(x => { x.disabled = !on; });
   msg(); dots();
-  $('#pinVolver').onclick = renderInformeGrupo;
-  const dentro = r => {
-    state.llave = r.llave; store.set(claveLlave(), r.llave);
-    toast(crear ? `PIN guardado. Este móvil ya te recuerda, ${persona.nombre.split(' ')[0]}.` : `Hola, ${persona.nombre.split(' ')[0]}. Este móvil ya te recuerda.`);
+  $('#pinVolver').onclick = () => { store.del(claveUltimo()); state.pend = null; renderInformeGrupo(); };
+  const dentro = async r => {
+    state.llave = r.llave; store.set(claveLlave(), r.llave); store.set(claveUltimo(), persona.id);
+    const pend = state.pend; state.pend = null;
+    if (pend && pend.pubId === persona.id) {
+      try { await enviarConLlave(pend.row); toast('✓ Informe enviado. ¡Gracias!'); }
+      catch (e) { toast('⚠️ ' + e.message.replace('PIN_CADUCADO: ', '')); }
+    } else {
+      toast(crear ? `PIN guardado, ${persona.nombre.split(' ')[0]}. Recuérdalo: se pide cada hora.` : `Hola, ${persona.nombre.split(' ')[0]}`);
+    }
     return renderInformeGrupo();
   };
   el.querySelectorAll('[data-k]').forEach(b => b.onclick = async () => {
