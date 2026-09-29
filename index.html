@@ -252,7 +252,8 @@ function closeModal() { $('#modal').classList.remove('on'); }
 $('#modal').onclick = e => { if (e.target.id === 'modal') closeModal(); };
 const num = v => { const n = parseFloat(v); return isNaN(n) ? 0 : n; };
 const digits = t => { const d = String(t || '').replace(/\D/g, ''); return d.length === 9 ? '34' + d : d; };
-const waHref = (tel, text) => `https://wa.me/${digits(tel)}?text=${encodeURIComponent(text)}`;
+// api.whatsapp.com y no wa.me: la redirección de wa.me estropea los emojis (salen como «�»)
+const waHref = (tel, text) => `https://api.whatsapp.com/send?${digits(tel) ? `phone=${digits(tel)}&` : ''}text=${encodeURIComponent(text)}`;
 async function copiar(text, ok = 'Copiado') {
   try { await navigator.clipboard.writeText(text); toast(ok); } catch { prompt('Copia el texto:', text); }
 }
@@ -262,6 +263,8 @@ function busy(btn, txt) { const t = btn.textContent; btn.disabled = true; btn.te
 const ym = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
 function mesLabel(m) { const [y, mm] = m.split('-'); return `${MESES[+mm - 1]} ${y}`; }
 function prevMonth() { const d = new Date(); d.setDate(1); d.setMonth(d.getMonth() - 1); return ym(d); }
+/** Mes que toca informar: del 25 a fin de mes, el mes en curso (muchos informan la última semana); antes, el anterior */
+function mesInforme() { return new Date().getDate() >= 25 ? ym(new Date()) : prevMonth(); }
 function lastMonths(n) {
   const out = [], d = new Date(); d.setDate(1);
   for (let i = 0; i < n; i++) { out.push(ym(d)); d.setMonth(d.getMonth() - 1); }
@@ -517,7 +520,7 @@ let infMes = null;
 async function renderInforme() {
   if (esModoGrupo()) return renderInformeGrupo();
   const el = $('#v-informe');
-  infMes = infMes || prevMonth();
+  infMes = infMes || mesInforme();
   el.innerHTML = SPIN;
   try {
     const mis = await q(sb.from('informes').select('*').eq('publicador_id', state.me.id).order('mes', { ascending: false }).limit(12));
@@ -527,7 +530,7 @@ async function renderInforme() {
 
 /** Formulario + historial. guardar = función propia en modo grupo (PIN); null = sesión normal */
 function pintarInforme(el, pub, mis, guardar) {
-  infMes = infMes || prevMonth();
+  infMes = infMes || mesInforme();
   el.innerHTML = `
     <div class="card">
       <h3>Informe de predicación</h3>
@@ -652,7 +655,7 @@ function chipInforme(r) {
 
 async function renderGrupo() {
   const el = $('#v-grupo');
-  grpMes = grpMes || prevMonth();
+  grpMes = grpMes || mesInforme();
   grpId = grpId || state.me.grupo_id;
   try {
     if (esGestor() && !state.grupos.length) state.grupos = await q(sb.from('grupos').select('id,nombre').order('nombre'));
@@ -843,7 +846,7 @@ async function avisarGrupo(id, recienPublicado = false) {
 }
 
 /* ─────────── Admin (secretario / administrador) ─────────── */
-let adminTab = null, repMes = prevMonth();
+let adminTab = null, repMes = mesInforme();
 
 function renderAdmin() {
   const tabs = [
