@@ -294,6 +294,8 @@ async function errFuncion(error, data) {
 async function boot() {
   try {
     const t = qs.get('t');
+    // El enlace manda: con ?g= (y sin ?t=) siempre modo grupo, aunque este navegador tenga sesión de gestión
+    if (GRUPO && !t) return bootGrupo();
     let { data: { session } } = await sb.auth.getSession();
 
     // Si llega un enlace nuevo (o de otra persona), se canjea por una sesión.
