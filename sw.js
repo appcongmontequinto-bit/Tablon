@@ -3,7 +3,7 @@
 //   Solo si no hay conexión se muestra la última copia guardada.
 // · Iconos y librerías (supabase-js, PDF.js, Excel) se guardan en caché para abrir más rápido.
 // · Los datos (Supabase) nunca se guardan aquí: siempre se piden en directo.
-const VERSION = 'tablon-v1';
+const VERSION = 'tablon-v2';   // súbela al cambiar iconos para que los móviles dejen la copia vieja
 const BASICOS = ['./', './index.html', './manifest.webmanifest', './icons/icon-192.png', './icons/icon-512.png'];
 
 self.addEventListener('install', e => {
