@@ -21,4 +21,4 @@ jobs:
             -H "apikey: ${{ secrets.SUPABASE_KEY }}" \
             -H "Content-Type: application/json" -d '{}')
           echo "Respuesta: $code"
-          test "$code" -lt 500
+          test "$code" -lt 400   # 4xx = secretos mal puestos → la tarea sale en rojo
