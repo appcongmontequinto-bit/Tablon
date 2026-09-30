@@ -127,8 +127,18 @@
   .when { display: inline-flex; gap: 6px; align-items: center; background: var(--primary-soft); color: var(--primary);
     padding: 5px 10px; border-radius: 10px; font-size: .86rem; font-weight: 600; margin-top: 6px; }
   .t-actividad .when { background: var(--c-actividad-soft); color: var(--c-actividad); }
-  .repite { font-size: .85rem; color: var(--muted); margin-top: 6px; line-height: 1.45; }
-  .repite b { color: var(--text); font-weight: 600; }
+  .rp { margin-top: 8px; border-radius: 14px; background: var(--c-actividad-soft); padding: 12px 14px; }
+  .rp-prox { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+  .rp-prox small { width: 100%; font-size: .72rem; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--c-actividad); }
+  .rp-prox b { font-size: 1.12rem; letter-spacing: -.01em; }
+  .rp-prox span { font-size: 1.12rem; font-weight: 700; color: var(--c-actividad); }
+  .rp-reglas { margin-top: 10px; border-top: .5px solid var(--line); }
+  .rp-regla { display: flex; justify-content: space-between; gap: 10px; padding: 7px 0; border-bottom: .5px solid var(--line); font-size: .93rem; }
+  .rp-regla span:first-letter { text-transform: uppercase; }
+  .rp-regla b { font-weight: 600; font-variant-numeric: tabular-nums; }
+  .rp-sig { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 10px; }
+  .rp-sig small { font-size: .78rem; color: var(--muted); margin-right: 2px; }
+  .rp-sig span { background: var(--card); border-radius: 999px; padding: 3px 10px; font-size: .82rem; font-weight: 500; }
   .regla { background: var(--fill); border-radius: 12px; padding: 10px 12px; margin-top: 8px; }
   .regla .sems { display: flex; gap: 6px; flex-wrap: wrap; }
   .regla .sems label { margin: 0; display: inline-flex; align-items: center; gap: 4px; background: var(--card); color: var(--text);
@@ -723,11 +733,23 @@ function sortItems(list) {
 }
 function linkify(s) { return s.replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1" target="_blank" rel="noopener">$1</a>'); }
 
+/** Bloque de una actividad que se repite: próxima fecha grande, reglas cortas y siguientes fechas en etiquetas */
 function bloqueRepite(rep) {
-  const [prox, ...sig] = proximas(rep, 4);
-  const ico = svgI('<path d="M17 2.5l3 3-3 3"/><path d="M4 11V9.5a4 4 0 0 1 4-4h12M7 21.5l-3-3 3-3"/><path d="M20 13v1.5a4 4 0 0 1-4 4H4"/>');
-  return `<div class="when">${ico} ${prox ? 'Próxima: ' + esc(fechaCorta2(prox)) : 'Se repite'}</div>
-    <div class="repite"><b>${esc(textoRepeticion(rep))}</b>${sig.length ? `<br>Después: ${sig.map(x => esc(fechaCorta2(x))).join(' · ')}` : ''}</div>`;
+  const fechas = proximas(rep, 5);
+  const prox = fechas[0];
+  const reglas = (rep.reglas || []).map(r => {
+    const sem = [...r.sem].sort((a, b) => (a === -1 ? 9 : a) - (b === -1 ? 9 : b)).map(n => n === -1 ? 'último' : n + '.º');
+    const lista = sem.length > 1 ? sem.slice(0, -1).join(', ') + ' y ' + sem.at(-1) : sem[0];
+    return `<div class="rp-regla"><span>${esc(lista)} ${DIAS[r.dia]}</span>${r.hora ? `<b>${esc(r.hora)}</b>` : ''}</div>`;
+  }).join('');
+  const diaLargo = d => d.toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' });
+  const chip = d => d.toLocaleDateString('es-ES', { weekday: 'short', day: 'numeric', month: 'short' }).replace(',', '');
+  return `<div class="rp">
+    ${prox ? `<div class="rp-prox"><small>Próxima</small><b>${esc(diaLargo(prox.d).replace(/^./, c => c.toUpperCase()))}</b>
+      ${prox.hora ? `<span>${prox.d.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}</span>` : ''}</div>` : ''}
+    <div class="rp-reglas">${reglas}</div>
+    ${fechas.length > 1 ? `<div class="rp-sig"><small>Después</small>${fechas.slice(1).map(x => `<span>${esc(chip(x.d))}</span>`).join('')}</div>` : ''}
+  </div>`;
 }
 function itemCard(it, admin = false) {
   const url = it.archivo_path ? state.urls[it.archivo_path] : null;
