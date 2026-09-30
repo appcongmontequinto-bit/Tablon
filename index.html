@@ -29,7 +29,7 @@
     --pin: #ff9500;
     --bg-anuncio: #f1faf3; --bg-actividad: #f8f2fc;
     --radius: 18px; --shadow: 0 1px 2px rgba(0,0,0,.04), 0 6px 20px rgba(0,0,0,.05);
-    --bar: rgba(249,249,251,.82);
+    --bar: #f9f9fb;
   }
   /* Oscuro: automático según el móvil, salvo que se elija Claro u Oscuro en ◐ */
   @media (prefers-color-scheme: dark) {
@@ -45,7 +45,7 @@
       --c-anuncio: #30d158;   --c-anuncio-soft: rgba(48,209,88,.18);
       --pin: #ff9f0a;
       --bg-anuncio: #16241a; --bg-actividad: #211a29;
-      --shadow: none; --bar: rgba(22,22,24,.82);
+      --shadow: none; --bar: #161618;
     }
   }
   :root[data-theme="dark"] {
@@ -60,18 +60,21 @@
     --c-anuncio: #30d158;   --c-anuncio-soft: rgba(48,209,88,.18);
     --pin: #ff9f0a;
     --bg-anuncio: #16241a; --bg-actividad: #211a29;
-    --shadow: none; --bar: rgba(22,22,24,.82);
+    --shadow: none; --bar: #161618;
   }
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   [hidden] { display: none !important; }
   html, body { margin: 0; background: var(--bg); color: var(--text);
     font: 17px/1.4 -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, "Segoe UI", Roboto, sans-serif;
     -webkit-font-smoothing: antialiased; }
+  /* Estructura de app: cabecera y barra inferior fijas en la pantalla, solo el contenido se desplaza.
+     (Una barra "position: fixed" a veces no se pinta en iPhone o en el navegador de WhatsApp hasta hacer scroll.) */
+  html { height: 100%; overflow: hidden; }
+  body { height: 100vh; height: 100dvh; display: flex; flex-direction: column; overflow: hidden; }
   a { color: var(--primary); }
   svg.i { width: 1em; height: 1em; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; flex: none; }
 
-  body > header { position: sticky; top: 0; z-index: 5; background: var(--bar);
-    -webkit-backdrop-filter: saturate(180%) blur(20px); backdrop-filter: saturate(180%) blur(20px);
+  body > header { position: relative; flex: none; z-index: 5; background: var(--bar);
     border-bottom: .5px solid var(--line);
     padding: calc(10px + env(safe-area-inset-top)) 16px 10px; display: flex; align-items: center; gap: 12px; }
   body > header .t { flex: 1; min-width: 0; }
@@ -79,9 +82,9 @@
   body > header small { color: var(--muted); display: block; font-size: .9rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   body > header button { background: var(--fill); color: var(--primary); border: 0; border-radius: 50%; width: 36px; height: 36px;
     font-size: 1.1rem; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; }
-  main { max-width: 760px; margin: 0 auto; padding: 14px 16px calc(96px + env(safe-area-inset-bottom)); }
-  nav.tabs { position: fixed; bottom: 0; left: 0; right: 0; z-index: 5; display: flex; background: var(--bar);
-    -webkit-backdrop-filter: saturate(180%) blur(20px); backdrop-filter: saturate(180%) blur(20px);
+  main { flex: 1 1 auto; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior-y: contain;
+    width: 100%; padding: 14px max(16px, calc((100% - 728px) / 2)) 28px; }
+  nav.tabs { position: relative; flex: none; z-index: 5; display: flex; background: var(--bar);
     border-top: .5px solid var(--line); padding-bottom: env(safe-area-inset-bottom); }
   nav.tabs button { flex: 1; border: 0; background: none; color: var(--muted); padding: 8px 4px 6px;
     font: inherit; font-size: .68rem; font-weight: 500; display: flex; flex-direction: column; align-items: center; gap: 3px; cursor: pointer; }
@@ -235,7 +238,7 @@
   .st.pend { background: var(--warn-soft); color: var(--warn); }
   .st.bad { background: var(--danger-soft); color: var(--danger); }
 
-  #toast { position: fixed; left: 50%; bottom: calc(90px + env(safe-area-inset-bottom)); transform: translateX(-50%);
+  #toast { position: fixed; left: 50%; bottom: calc(84px + env(safe-area-inset-bottom)); transform: translateX(-50%);
     background: rgba(30,30,32,.9); -webkit-backdrop-filter: blur(20px); backdrop-filter: blur(20px); color: #fff;
     padding: 11px 18px; border-radius: 999px; font-size: .9rem; font-weight: 500; z-index: 50;
     opacity: 0; pointer-events: none; transition: opacity .2s; max-width: calc(100% - 32px); }
@@ -612,7 +615,7 @@ function show(v) {
   document.querySelectorAll('nav.tabs button').forEach(b => b.classList.toggle('on', b.dataset.v === v));
   document.querySelectorAll('.view').forEach(s => s.classList.toggle('on', s.id === 'v-' + v));
   ({ tablon: renderBoard, informe: renderInforme, grupo: renderGrupo, admin: renderAdmin })[v]();
-  scrollTo(0, 0);
+  $('main').scrollTo(0, 0);
 }
 /* Tema: automático (como el móvil) → claro → oscuro */
 const TEMAS = { auto: ['◐', 'automático (como el móvil)'], light: ['☀︎', 'claro'], dark: ['☾', 'oscuro'] };
@@ -1301,7 +1304,7 @@ function renderAdmin() {
 /** Editar una publicación: abre el formulario de Publicar ya relleno */
 function editarItem(id) {
   state.editando = state.items.find(i => i.id === id) || null;
-  adminTab = 'publicar'; renderAdmin(); scrollTo(0, 0);
+  adminTab = 'publicar'; renderAdmin(); $('main').scrollTo(0, 0);
 }
 const aInputLocal = iso => { const d = new Date(iso); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 16); };
 
