@@ -89,6 +89,41 @@
   /* Territorios: el visor ocupa toda la pantalla entre la cabecera y la barra de abajo, como una pestaña más */
   body.ver-territorios main { padding: 0; max-width: none; }
   .ter-frame { display: block; width: 100%; border: 0; background: var(--bg); min-height: 300px; }
+  /* Punto de aviso en las pestañas */
+  nav.tabs button .ic { position: relative; }
+  nav.tabs button.punto .ic::after { content: ""; position: absolute; top: -2px; right: -5px; width: 10px; height: 10px;
+    border-radius: 50%; background: #ff3b30; box-shadow: 0 0 0 2px var(--bar); }
+  nav.tabs button.punto.naranja .ic::after { background: #ff9500; }
+  /* Avisos arriba del tablón */
+  .aviso { display: flex; align-items: center; gap: 12px; background: var(--card); border-radius: 16px; padding: 12px 14px;
+    margin-bottom: 12px; box-shadow: var(--shadow); border-left: 4px solid #ff3b30; }
+  .aviso.naranja { border-left-color: #ff9500; }
+  .aviso .av-ico { width: 36px; height: 36px; border-radius: 10px; display: flex; align-items: center; justify-content: center;
+    font-size: 1.2rem; flex: none; background: rgba(255,59,48,.12); color: #ff3b30; }
+  .aviso.naranja .av-ico { background: rgba(255,149,0,.15); color: #ff9500; }
+  .aviso > div { flex: 1; min-width: 0; line-height: 1.25; }
+  .aviso b { display: block; } .aviso small { color: var(--muted); font-size: .82rem; }
+  /* «Nuevo» */
+  .nuevo { background: var(--primary); color: #fff; font-size: .62rem; font-weight: 700; padding: 2px 6px; border-radius: 99px; margin-left: 6px;
+    letter-spacing: .02em; text-transform: uppercase; }
+  /* Tarjetas fantasma */
+  .sk .sk-l { height: 12px; border-radius: 6px; background: var(--fill); margin: 10px 0; animation: skp 1.2s ease-in-out infinite; }
+  .sk .sk-l.h { height: 20px; margin: 14px 0; }
+  .sk .w35 { width: 35%; } .sk .w55 { width: 55%; } .sk .w75 { width: 75%; }
+  @keyframes skp { 50% { opacity: .45; } }
+  /* Deslizar para actualizar */
+  html, body { overscroll-behavior-y: contain; }
+  #ptr { position: fixed; left: 50%; top: 60px; z-index: 6; width: 36px; height: 36px; border-radius: 50%; background: var(--card);
+    color: var(--muted); box-shadow: 0 2px 10px rgba(0,0,0,.15); display: flex; align-items: center; justify-content: center;
+    font-size: 1.15rem; opacity: 0; transform: translate(-50%, -44px); transition: transform .2s, opacity .2s; pointer-events: none; }
+  #ptr.listo { color: var(--primary); }
+  #ptr.girando svg { animation: sp .7s linear infinite; }
+  /* Progreso del grupo */
+  .anillo { position: relative; width: 64px; height: 64px; margin: 0 auto 4px; }
+  .anillo svg { width: 64px; height: 64px; transform: rotate(-90deg); }
+  .anillo circle { fill: none; stroke-width: 7; }
+  .anillo .fondo { stroke: var(--fill); } .anillo .valor { stroke: var(--ok); stroke-linecap: round; transition: stroke-dashoffset .6s; }
+  .stat .anillo b { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: .95rem; }
   main { max-width: 760px; margin: 0 auto; padding: 14px 16px calc(96px + env(safe-area-inset-bottom)); }
   nav.tabs { position: fixed; left: 0; right: 0; bottom: 0; z-index: 20; display: flex; background: var(--bar);
     transform: translateZ(0); will-change: transform; backface-visibility: hidden;
@@ -300,7 +335,7 @@
       <button class="chip" data-f="actividad">Actividades</button>
       <button class="chip" data-f="anuncio">Anuncios</button>
     </div>
-    <div id="board"><div class="spinner"></div></div>
+    <div id="board"></div>
   </section>
   <section class="view" id="v-informe"></section>
   <section class="view" id="v-grupo"></section>
@@ -598,6 +633,7 @@ async function arrancarGestion(perfil) {
     }
     show('tablon');
     await Promise.all([cargarCerrados(), loadBoard(), cargarMesFijo()]);
+    comprobarInforme();
   } catch (e) {
     $('#board').innerHTML = `<div class="empty">⚠️ ${esc(e.message)}</div>`;
   }
@@ -626,9 +662,9 @@ async function bootGrupo() {
   document.querySelector('[data-v="grupo"]').hidden = true;
   document.querySelector('[data-v="admin"]').hidden = true;
   pestanaTerritorios(null);
-  if (state.llave) sb.rpc('dispositivo_datos', { p_llave: state.llave })
-    .then(({ data }) => pestanaTerritorios(data?.perfil?.visor)).catch(() => {});
   await Promise.all([loadBoard(), cargarMesFijo()]);
+  if (state.llave) sb.rpc('dispositivo_datos', { p_llave: state.llave })
+    .then(({ data }) => { pestanaTerritorios(data?.perfil?.visor); if (data) marcarPendiente(data.informes); }).catch(() => {});
 }
 
 async function cargarCerrados() {
@@ -637,11 +673,177 @@ async function cargarCerrados() {
   state.cerrados = new Set(rows.map(r => r.mes));
 }
 
+/* ─────────── Avisos: informe pendiente y territorio por vencer (punto en la pestaña + aviso en el tablón) ─────────── */
+function puntoPestana(v, on, color) {
+  const b = document.querySelector(`nav.tabs [data-v="${v}"]`);
+  if (b) { b.classList.toggle('punto', !!on); b.classList.toggle('naranja', color === 'naranja'); }
+}
+/** informes = los míos (null si no se sabe: enlace del grupo sin PIN) */
+function marcarPendiente(informes) {
+  const antes = state.pendiente;
+  state.pendiente = !informes || esSecre() ? null : !informes.some(r => r.mes === mesInforme());
+  puntoPestana('informe', state.pendiente === true);
+  if (antes !== state.pendiente && vista === 'tablon') renderBoard();
+}
+async function comprobarInforme() {
+  if (esModoGrupo() || esSecre() || !state.me?.id) return;
+  try { marcarPendiente(await q(sb.from('informes').select('mes').eq('publicador_id', state.me.id).eq('mes', mesInforme()))); }
+  catch { /* sin conexión: sin aviso */ }
+}
+/* Territorios: se consulta la app Territorios (clave pública, la misma que usa su visor) */
+/* La dirección y la clave pública se leen del propio visor (está en el mismo sitio), así no hay que copiarlas aquí */
+let terCfg = null;
+async function cfgTerritorios() {
+  if (terCfg) return terCfg;
+  const t = await fetch(VISOR_TERRITORIOS, { cache: 'no-cache' }).then(r => r.text());
+  const url = (t.match(/SB_URL\s*=\s*'([^']+)'/) || [])[1], key = (t.match(/SB_KEY\s*=\s*'([^']+)'/) || [])[1];
+  if (!url || !key) throw new Error('Sin configuración de Territorios');
+  return terCfg = { url, key };
+}
+const TER_AVISO_DIAS = 20;   // como en Territorios
+async function comprobarTerritorios(visor) {
+  state.terAviso = null; puntoPestana('territorios', false);
+  if (!visor) return;
+  try {
+    const { url, key } = await cfgTerritorios();
+    const r = await fetch(`${url}/rest/v1/territorios?select=num,fecha_vence,estado&pub_id=eq.${encodeURIComponent(visor)}&estado=in.(asignado,vencido)`,
+      { headers: { apikey: key, Authorization: 'Bearer ' + key } });
+    if (!r.ok) return;
+    const hoy = new Date(); hoy.setHours(0, 0, 0, 0);
+    const lista = (await r.json()).map(t => ({ num: t.num,
+      dias: t.estado === 'vencido' ? -1 : t.fecha_vence ? Math.round((new Date(t.fecha_vence + 'T00:00:00') - hoy) / 864e5) : 999 }));
+    const peor = lista.filter(t => t.dias <= TER_AVISO_DIAS).sort((a, b) => a.dias - b.dias)[0];
+    state.terAviso = peor || null;
+    puntoPestana('territorios', !!peor, 'naranja');
+    if (vista === 'tablon') renderBoard();
+  } catch { /* sin conexión o Territorios no responde: sin aviso */ }
+}
+const ICO_DOC = '<path d="M14 3H7.5A2.5 2.5 0 0 0 5 5.5v13A2.5 2.5 0 0 0 7.5 21h9a2.5 2.5 0 0 0 2.5-2.5V8z"/><path d="M14 3v5h5M9 13h6M9 17h4"/>';
+const ICO_MAPA = '<path d="M9 4 3.5 6v14L9 18l6 2 5.5-2V4L15 6z"/><path d="M9 4v14M15 6v14"/>';
+function avisosTablon() {
+  let h = '';
+  if (state.pendiente === true)
+    h += `<div class="aviso"><span class="av-ico">${svgI(ICO_DOC)}</span>
+      <div><b>Falta tu informe de ${mesLabel(mesInforme())}</b><small>Te lleva un minuto</small></div>
+      <button class="btn sm" onclick="show('informe')">Enviar</button></div>`;
+  const t = state.terAviso;
+  if (t && !document.querySelector('[data-v="territorios"]').hidden)
+    h += `<div class="aviso naranja"><span class="av-ico">${svgI(ICO_MAPA)}</span>
+      <div><b>Territorio ${esc(String(t.num))} ${t.dias < 0 ? 'vencido' : t.dias === 0 ? 'vence hoy' : `vence en ${t.dias} día${t.dias === 1 ? '' : 's'}`}</b>
+      <small>${t.dias < 0 ? 'Devuélvelo o pide una prórroga' : 'Termínalo o pide una prórroga'}</small></div>
+      <button class="btn sec sm" onclick="show('territorios')">Ver</button></div>`;
+  return h;
+}
+
+/* ─────────── «Nuevo»: publicaciones que aún no habías visto (se recuerda la última visita en este móvil) ─────────── */
+function marcarVisita() {
+  if (state.vistoMarcado) return;
+  state.vistoMarcado = true;
+  state.vistoAntes = store.get('tablon_visto');
+  store.set('tablon_visto', new Date().toISOString());
+}
+const esNuevo = it => state.vistoAntes && it.creado && new Date(it.creado) > new Date(state.vistoAntes);
+
+/* ─────────── Añadir al calendario (.ics), con aviso 1 hora antes; las que se repiten, con su regla ─────────── */
+const BYDAY = ['SU', 'MO', 'TU', 'WE', 'TH', 'FR', 'SA'];
+const p2 = n => String(n).padStart(2, '0');
+const icsDia = d => `${d.getFullYear()}${p2(d.getMonth() + 1)}${p2(d.getDate())}`;
+const icsHora = d => `${icsDia(d)}T${p2(d.getHours())}${p2(d.getMinutes())}00`;
+const icsTxt = s => String(s || '').replace(/\\/g, '\\\\').replace(/\r?\n/g, '\\n').replace(/([,;])/g, '\\$1');
+const VTZ_MADRID = ['BEGIN:VTIMEZONE', 'TZID:Europe/Madrid',
+  'BEGIN:DAYLIGHT', 'TZOFFSETFROM:+0100', 'TZOFFSETTO:+0200', 'TZNAME:CEST', 'DTSTART:19700329T020000', 'RRULE:FREQ=YEARLY;BYMONTH=3;BYDAY=-1SU', 'END:DAYLIGHT',
+  'BEGIN:STANDARD', 'TZOFFSETFROM:+0200', 'TZOFFSETTO:+0100', 'TZNAME:CET', 'DTSTART:19701025T030000', 'RRULE:FREQ=YEARLY;BYMONTH=10;BYDAY=-1SU', 'END:STANDARD',
+  'END:VTIMEZONE'];
+const puedeCalendario = it => it.tipo === 'actividad' && (it.repeticion?.reglas?.length || (it.fecha_evento && !isPast(it)));
+function alCalendario(id) {
+  const it = state.items.find(i => i.id === id);
+  if (!it) return;
+  const stamp = new Date().toISOString().replace(/[-:]/g, '').replace(/\.\d+/, '');
+  const evento = (uid, d, conHora, rrule) => {
+    const fin = new Date(d); if (conHora) fin.setMinutes(fin.getMinutes() + 90); else fin.setDate(fin.getDate() + 1);
+    return ['BEGIN:VEVENT', `UID:${uid}@tablon-montequinto`, `DTSTAMP:${stamp}`,
+      conHora ? `DTSTART;TZID=Europe/Madrid:${icsHora(d)}` : `DTSTART;VALUE=DATE:${icsDia(d)}`,
+      conHora ? `DTEND;TZID=Europe/Madrid:${icsHora(fin)}` : `DTEND;VALUE=DATE:${icsDia(fin)}`,
+      ...(rrule ? [rrule] : []), `SUMMARY:${icsTxt(it.titulo)}`, ...(it.texto ? [`DESCRIPTION:${icsTxt(it.texto)}`] : []),
+      'BEGIN:VALARM', 'ACTION:DISPLAY', `DESCRIPTION:${icsTxt(it.titulo)}`, `TRIGGER:${conHora ? '-PT1H' : '-PT15H'}`, 'END:VALARM',
+      'END:VEVENT'];
+  };
+  let evs = [];
+  if (it.repeticion?.reglas?.length) {
+    it.repeticion.reglas.forEach((r, i) => {
+      const prim = proximas({ reglas: [r] }, 1)[0];
+      if (prim) evs.push(...evento(`${it.id}-${i}`, prim.d, prim.hora,
+        `RRULE:FREQ=MONTHLY;BYDAY=${[...r.sem].map(n => n + BYDAY[r.dia]).join(',')}`));
+    });
+  } else {
+    const d = new Date(it.fecha_evento);
+    evs = evento(it.id, d, !!(d.getHours() || d.getMinutes()));
+  }
+  if (!evs.length) return toast('No hay próximas fechas');
+  const ics = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Tablon Montequinto//ES', 'CALSCALE:GREGORIAN', 'METHOD:PUBLISH',
+    ...VTZ_MADRID, ...evs, 'END:VCALENDAR'].join('\r\n');
+  const nombre = (it.titulo.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^\w]+/g, '-').replace(/^-|-$/g, '').toLowerCase() || 'actividad') + '.ics';
+  if (/iPhone|iPad|iPod/.test(navigator.userAgent)) {   // en iPhone, abrirlo directamente muestra «Añadir al calendario»
+    location.href = 'data:text/calendar;charset=utf-8,' + encodeURIComponent(ics);
+  } else {
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([ics], { type: 'text/calendar;charset=utf-8' }));
+    a.download = nombre; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+  }
+  toast('📅 Ábrelo para añadirlo a tu calendario');
+}
+
+/* ─────────── Tarjetas «fantasma» mientras carga ─────────── */
+const SKEL = (n = 3) => `<div class="skel" aria-busy="true" aria-label="Cargando">${Array.from({ length: n }, () =>
+  '<div class="card sk"><div class="sk-l w35"></div><div class="sk-l h w75"></div><div class="sk-l"></div><div class="sk-l w55"></div></div>').join('')}</div>`;
+
+if (!$('#board').innerHTML.trim()) $('#board').innerHTML = SKEL(3);
+
+/* ─────────── Deslizar hacia abajo para actualizar (como en las apps del móvil) ─────────── */
+(function deslizarParaActualizar() {
+  const ind = document.createElement('div');
+  ind.id = 'ptr'; ind.setAttribute('aria-hidden', 'true');
+  ind.innerHTML = '<svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M19.5 12a7.5 7.5 0 1 1-2.2-5.3"/><path d="M19.5 4.5v4h-4"/></svg>';
+  document.body.appendChild(ind);
+  let y0 = null, tirando = false;
+  const bloqueado = () => scrollY > 0 || vista === 'territorios' || $('#btnRefresh').hidden || $('nav.tabs').hidden
+    || $('#modal').classList.contains('on') || !$('#pdfv').hidden || $('#viewer').classList.contains('on');
+  const soltar = () => { ind.style.transition = ''; ind.style.transform = ''; ind.style.opacity = ''; ind.classList.remove('listo'); tirando = false; };
+  addEventListener('touchstart', e => {
+    y0 = bloqueado() || e.touches.length > 1 ? null : e.touches[0].clientY;
+    if (y0 !== null) ind.style.top = ($('body > header').getBoundingClientRect().bottom + 6) + 'px';
+  }, { passive: true });
+  addEventListener('touchmove', e => {
+    if (y0 === null) return;
+    const dy = e.touches[0].clientY - y0;
+    if (dy <= 0 || scrollY > 0) { if (tirando) soltar(); return; }
+    tirando = true;
+    const d = Math.min(dy * 0.5, 90);
+    ind.style.transition = 'none';
+    ind.style.transform = `translate(-50%, ${d - 44}px) rotate(${d * 4}deg)`;
+    ind.style.opacity = Math.min(1, d / 50);
+    ind.classList.toggle('listo', d >= 60);
+  }, { passive: true });
+  addEventListener('touchend', () => {
+    if (y0 === null) return;
+    y0 = null;
+    if (ind.classList.contains('listo')) {
+      ind.classList.add('girando'); ind.style.transition = ''; ind.style.transform = 'translate(-50%, 16px)';
+      navigator.vibrate?.(10);
+      $('#btnRefresh').click();
+    } else soltar();
+  });
+})();
+
 /* ─────────── Territorios: el visor de la app Territorios de cada hermano ───────────
    Solo aparece a quien el admin le haya enlazado su visor. Desde el enlace del grupo hace falta el PIN. */
 const VISOR_TERRITORIOS = 'https://appcongmontequinto-bit.github.io/visor-montequinto/';
 function pestanaTerritorios(visor) {
-  document.querySelector('[data-v="territorios"]').hidden = !visor;
+  const b = document.querySelector('[data-v="territorios"]');
+  const antes = b.dataset.visor || '';
+  b.hidden = !visor; b.dataset.visor = visor || '';
+  if (String(visor || '') !== antes) comprobarTerritorios(visor);
   if (!visor) { const el = $('#v-territorios'); el.innerHTML = ''; delete el.dataset.url; if (vista === 'territorios') show('tablon'); }
 }
 async function renderTerritorios() {
@@ -866,6 +1068,8 @@ function itemCard(it, admin = false) {
   const fileBtn = !url ? '' : isPdf(it)
     ? `<button class="btn sm" onclick="verPdf('${it.id}')">📄 Ver PDF</button>`
     : `<a class="btn sec sm" href="${esc(url)}" target="_blank" rel="noopener">${isImg(it) ? '🔍 Abrir original' : '📎 Abrir archivo'}</a>`;
+  const calBtn = !admin && puedeCalendario(it)
+    ? `<button class="btn sec sm" onclick="alCalendario('${it.id}')">${svgI('<rect x="3.5" y="5" width="17" height="15.5" rx="3"/><path d="M3.5 10h17M8 3v4M16 3v4M12 13v5M9.5 15.5h5"/>')} Añadir al calendario</button>` : '';
   const adminBtns = admin ? `
       <button class="btn sm" onclick="editarItem('${it.id}')">✏️ Editar</button>
       <button class="btn sec sm" onclick="avisarGrupo('${it.id}')">📣 Avisar al grupo</button>
@@ -875,7 +1079,8 @@ function itemCard(it, admin = false) {
     <article class="card t-${it.tipo} ${isPast(it) ? 'past' : ''}">
       <div class="meta">
         <span class="tico">${TIPO_ICO[it.tipo] || ''}</span>
-        <span class="tlabel">${TIPO_LBL[it.tipo] || it.tipo}</span><span class="sep">·</span><span>${hace(it.creado)}</span>
+        <span class="tlabel">${TIPO_LBL[it.tipo] || it.tipo}</span>${!admin && esNuevo(it) ? '<span class="nuevo" title="Publicado desde tu última visita">Nuevo</span>'
+          : `<span class="sep">·</span><span>${hace(it.creado)}</span>`}
         ${it.fijado ? `<span class="fij">${ICO_PIN} Fijado</span>` : ''}
       </div>
       <h3>${esc(it.titulo)}</h3>
@@ -883,14 +1088,15 @@ function itemCard(it, admin = false) {
         : it.fecha_evento ? `<div class="when">${svgI('<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>')} ${esc(fmtFecha(it.fecha_evento))}</div>` : ''}
       ${it.texto ? `<p class="texto">${linkify(esc(it.texto))}</p>` : ''}
       ${media}
-      ${(fileBtn || adminBtns) ? `<div class="row">${fileBtn}${adminBtns}</div>` : ''}
+      ${(fileBtn || adminBtns || calBtn) ? `<div class="row">${fileBtn}${calBtn}${adminBtns}</div>` : ''}
     </article>`;
 }
 function renderBoard() {
   if (!state.me) return;
+  marcarVisita();
   const list = sortItems(state.items.filter(i => state.filter === 'todo' || i.tipo === state.filter));
-  $('#board').innerHTML = list.length ? list.map(i => itemCard(i)).join('')
-    : `<div class="empty">No hay publicaciones todavía.</div>`;
+  $('#board').innerHTML = avisosTablon() + (list.length ? list.map(i => itemCard(i)).join('')
+    : `<div class="empty">No hay publicaciones todavía.</div>`);
 }
 function openViewer(path) { const v = $('#viewer'); v.querySelector('img').src = state.urls[path]; v.classList.add('on'); }
 function closeViewer() { $('#viewer').classList.remove('on'); }
@@ -1062,7 +1268,7 @@ async function renderInforme() {
   if (esModoGrupo()) return renderInformeGrupo();
   const el = $('#v-informe');
   infMes = esAdmin() ? (infMes || mesInforme()) : mesInforme();
-  el.innerHTML = SPIN;
+  el.innerHTML = SKEL(1);
   try {
     const mis = await q(sb.from('informes').select('*').eq('publicador_id', state.me.id).order('mes', { ascending: false }).limit(12));
     pintarInforme(el, state.me, mis, null);
@@ -1071,6 +1277,7 @@ async function renderInforme() {
 
 /** Formulario + historial. guardar = función propia en modo grupo (PIN); null = sesión normal */
 function pintarInforme(el, pub, mis, guardar) {
+  marcarPendiente(mis);
   const eligeMes = !guardar && esAdmin();   // los hermanos no tocan el mes: lo fija el admin
   infMes = eligeMes ? (infMes || mesInforme()) : mesInforme();
   el.innerHTML = `
@@ -1093,7 +1300,7 @@ function pintarInforme(el, pub, mis, guardar) {
     e.preventDefault();
     await sb.rpc('dispositivo_salir', { p_llave: state.llave }).catch(() => {});
     store.del(claveLlave()); store.del(claveUltimo()); state.llave = null; state.dev = null; state.pend = null;
-    pestanaTerritorios(null);
+    pestanaTerritorios(null); marcarPendiente(null);
     renderInforme();
   };
   informeForm($('#infForm'), { pub, mes: infMes, existente: mis.find(r => r.mes === infMes), propio: true,
@@ -1107,7 +1314,7 @@ const enviarConLlave = row => q(sb.rpc('dispositivo_enviar', {
 
 async function renderInformeGrupo() {
   const el = $('#v-informe');
-  el.innerHTML = SPIN;
+  el.innerHTML = SKEL(1);
   try {
     if (state.llave) {
       const d = await q(sb.rpc('dispositivo_datos', { p_llave: state.llave }));
@@ -1223,6 +1430,14 @@ function chipInforme(r) {
   return `<span class="st ok">✓ ${c}${h}${r.auxiliar ? ' · Aux' : ''}</span>`;
 }
 
+/** Anillo de progreso: recibidos / total */
+function anillo(n, total) {
+  const r = 27, c = 2 * Math.PI * r, pct = total ? Math.min(1, n / total) : 0;
+  return `<div class="anillo" role="img" aria-label="${n} de ${total}"><svg viewBox="0 0 64 64">
+    <circle class="fondo" cx="32" cy="32" r="${r}"/><circle class="valor" cx="32" cy="32" r="${r}"
+      stroke-dasharray="${c.toFixed(1)}" stroke-dashoffset="${(c * (1 - pct)).toFixed(1)}" ${pct === 0 ? 'stroke-opacity="0"' : ''}/></svg>
+    <b>${n}/${total}</b></div>`;
+}
 async function renderGrupo() {
   const el = $('#v-grupo');
   grpMes = grpMes || mesInforme();
@@ -1239,7 +1454,7 @@ async function renderGrupo() {
         `<option value="${g.id}" ${g.id === grpId ? 'selected' : ''}>${esc(g.nombre)}</option>`).join('')}</select></div>` : ''}
       <div ${esGestor() ? '' : 'style="grid-column:1/-1"'}><label for="gMes">Mes</label><select id="gMes">${mesOptions(6, grpMes)}</select></div>
     </div></div>
-    <div id="gBody">${SPIN}</div>`;
+    <div id="gBody">${SKEL(2)}</div>`;
   if ($('#gVolver')) $('#gVolver').onclick = () => show('admin');
   if ($('#gSel')) $('#gSel').onchange = e => { grpId = +e.target.value; renderGrupo(); };
   $('#gMes').onchange = e => { grpMes = e.target.value; renderGrupo(); };
@@ -1267,7 +1482,7 @@ async function renderGrupo() {
     $('#gBody').innerHTML = `
       ${banner}
       <div class="card"><div class="stats">
-        <div class="stat"><b>${reps.length}/${miembros.length}</b><span>Recibidos</span></div>
+        <div class="stat">${anillo(reps.length, miembros.length)}<span>Recibidos</span></div>
         <div class="stat"><b>${yes.length}</b><span>Participaron</span></div>
         <div class="stat"><b>${yes.reduce((t, r) => t + r.cursos, 0)}</b><span>Cursos bíblicos</span></div>
       </div>
