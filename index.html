@@ -131,6 +131,11 @@
   .when { display: inline-flex; gap: 6px; align-items: center; background: var(--primary-soft); color: var(--primary);
     padding: 5px 10px; border-radius: 10px; font-size: .86rem; font-weight: 600; margin-top: 6px; }
   .t-actividad .when { background: var(--c-actividad-soft); color: var(--c-actividad); }
+  .rs { background: var(--card2); border-radius: 14px; padding: 4px 14px; }
+  .rs-fila { display: flex; justify-content: space-between; gap: 10px; padding: 10px 0; border-bottom: .5px solid var(--line); }
+  .rs-fila:last-child { border-bottom: 0; }
+  .rs-fila span { color: var(--muted); } .rs-fila b { font-variant-numeric: tabular-nums; }
+  .rs-com { padding: 10px 0; font-size: .95rem; }
   .mesfijo { margin: 12px 0 2px; padding: 10px 14px; border-radius: 12px; background: var(--primary-soft); color: var(--primary); font-size: 1.02rem; }
   .mesfijo b { text-transform: capitalize; }
   .rp { margin-top: 8px; border-radius: 14px; background: var(--c-actividad-soft); padding: 12px 14px; }
@@ -889,7 +894,29 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape') cerrarPdf(fa
 
 /* ─────────── Formulario de informe (propio o en nombre de otro) ─────────── */
 /** o = { pub:{id,nombre,precursor}, mes, existente, propio, onSaved } */
+/** Informe ya enviado: primero se ve en solo lectura; para cambiarlo hay que pulsar «Editar» (evita toques sin querer) */
+function resumenInforme(el, o) {
+  const r = o.existente, reg = !!o.pub.precursor, tu = o.propio;
+  const cerrado = state.cerrados.has(o.mes), bloqueado = cerrado && !esGestor();
+  const porOtro = r.enviado_por && r.enviado_por !== o.pub.id;
+  const fila = (k, v) => `<div class="rs-fila"><span>${k}</span><b>${v}</b></div>`;
+  el.innerHTML = `
+    <div class="notice ok">✓ Informe de ${mesLabel(o.mes)} enviado${porOtro && tu ? ' por tu superintendente' : ''}${r.tardio ? ' (tardío)' : ''}.</div>
+    <div class="rs">
+      ${fila(tu ? 'Participaste' : 'Participó', r.participo ? 'Sí' : 'No')}
+      ${r.participo ? fila('Cursos bíblicos', r.cursos) : ''}
+      ${r.participo && (reg || r.auxiliar) ? fila('Horas', num(r.horas)) : ''}
+      ${r.participo && !reg && r.auxiliar ? fila('Precursor auxiliar', 'Sí') : ''}
+      ${r.comentarios ? `<div class="rs-com">💬 ${esc(r.comentarios)}</div>` : ''}
+    </div>
+    ${bloqueado ? `<div class="notice warn" style="margin-top:10px">El secretario ya cerró ${mesLabel(o.mes)}. Si hay que corregir algo, habla con él.</div>`
+      : '<div class="row"><button class="btn sec block rs-editar">✏️ Editar informe</button></div>'}`;
+  const b = el.querySelector('.rs-editar');
+  if (b) b.onclick = () => informeForm(el, { ...o, editando: true });
+}
+
 function informeForm(el, o) {
+  if (o.existente && !o.editando) return resumenInforme(el, o);
   const ex = o.existente, reg = !!o.pub.precursor, cerrado = state.cerrados.has(o.mes);
   const bloqueado = cerrado && ex && !esGestor();
   const f = { participo: ex ? ex.participo : true, auxiliar: ex ? ex.auxiliar : false };
@@ -898,7 +925,9 @@ function informeForm(el, o) {
   el.innerHTML = `
     ${bloqueado ? `<div class="notice warn">El secretario ya cerró ${mesLabel(o.mes)}. Si hay que corregir algo, habla con él.</div>`
       : cerrado ? `<div class="notice warn">${mesLabel(o.mes)} ya está cerrado: se enviará como informe tardío.</div>` : ''}
-    ${ex && !bloqueado ? `<div class="notice ok">✓ Informe enviado${porOtro && tu ? ' por tu superintendente' : ''}. Puedes corregirlo.</div>` : ''}
+    ${ex && !bloqueado ? `<div class="notice info" style="display:flex;align-items:center;justify-content:space-between;gap:8px">
+      <span>✏️ Corrigiendo el informe${porOtro && tu ? ' que envió tu superintendente' : ''}</span>
+      <button class="btn ghost sm inf-cancelar">Cancelar</button></div>` : ''}
     <label>¿${tu ? 'Participaste' : 'Participó'} en alguna faceta de la predicación este mes?</label>
     <div class="seg"><button data-v="1" class="${f.participo ? 'on' : ''}">Sí</button><button data-v="0" class="${f.participo ? '' : 'on'}">No</button></div>
     <div class="fields" ${f.participo ? '' : 'hidden'}>
@@ -923,6 +952,7 @@ function informeForm(el, o) {
   });
   const aux = el.querySelector('.aux');
   if (aux) aux.onchange = () => { f.auxiliar = aux.checked; el.querySelector('.horasBox').hidden = !aux.checked; };
+  if (el.querySelector('.inf-cancelar')) el.querySelector('.inf-cancelar').onclick = () => resumenInforme(el, o);
   el.querySelector('.send').onclick = async e => {
     const horas = num(el.querySelector('.horas').value);
     if (f.participo && (reg || f.auxiliar) && !horas && !confirm('No has puesto horas. ¿Enviar igualmente?')) return;
