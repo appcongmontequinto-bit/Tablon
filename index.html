@@ -83,8 +83,9 @@
   body > header button:active { transform: scale(.92); }
   body > header button { background: var(--fill); color: var(--primary); border: 0; border-radius: 50%; width: 36px; height: 36px;
     font-size: 1.1rem; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; }
-  .ter-bar { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; font-weight: 600; }
-  .ter-frame { display: block; width: 100%; border: 0; border-radius: 14px; background: var(--card); min-height: 320px; }
+  /* Territorios: el visor ocupa toda la pantalla entre la cabecera y la barra de abajo, como una pestaña más */
+  body.ver-territorios main { padding: 0; max-width: none; }
+  .ter-frame { display: block; width: 100%; border: 0; background: var(--bg); min-height: 300px; }
   main { max-width: 760px; margin: 0 auto; padding: 14px 16px calc(96px + env(safe-area-inset-bottom)); }
   nav.tabs { position: fixed; left: 0; right: 0; bottom: 0; z-index: 20; display: flex; background: var(--bar);
     transform: translateZ(0); will-change: transform; backface-visibility: hidden;
@@ -663,9 +664,9 @@ async function renderTerritorios() {
   const url = VISOR_TERRITORIOS + '#p=' + encodeURIComponent(visor);
   if (el.dataset.url !== url) {   // no se recarga cada vez que se entra en la pestaña
     el.dataset.url = url;
-    el.innerHTML = `<div class="ter-bar"><span>🗺️ Mis territorios</span>
-        <a class="btn ghost sm" href="${url}" target="_blank" rel="noopener">Abrir aparte ↗</a></div>
-      <iframe class="ter-frame" src="${url}" title="Mis territorios" allow="geolocation; fullscreen"></iframe>`;
+    try { localStorage.setItem('ter_theme', temaOscuro() ? 'dark' : 'light'); } catch {}   // arranca ya con el tema del tablón
+    el.innerHTML = `<iframe class="ter-frame" src="${url}" title="Mis territorios" allow="geolocation; fullscreen"></iframe>`;
+    el.querySelector('iframe').onload = integrarVisor;
   }
   requestAnimationFrame(ajustarVisor);
 }
@@ -673,7 +674,30 @@ function ajustarVisor() {
   const f = $('#v-territorios iframe');
   if (!f || vista !== 'territorios') return;
   const nav = $('nav.tabs').getBoundingClientRect().height || 0;
-  f.style.height = Math.max(320, innerHeight - f.getBoundingClientRect().top - nav - 10) + 'px';
+  f.style.height = Math.max(300, innerHeight - f.getBoundingClientRect().top - nav) + 'px';
+}
+/* El visor está en el mismo sitio (github.io), así que se le puede ajustar el aspecto:
+   fuera su propia cabecera (nombre, tema, instalar, cambiar publicador) y mismos colores y letra que el tablón */
+const CSS_VISOR = `
+  .sw-header, #themeBtnVisor, #visorInstallBtn, button[onclick^="visorCambiarPublicador"] { display: none !important; }
+  :root, body.light { --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, system-ui, sans-serif; --blue: #007aff; }
+  body:not(.light) { --blue: #0a84ff; --bg: #000; }
+  #switcher { top: 0 !important; }`;
+function integrarVisor() {
+  try {
+    const d = $('#v-territorios iframe').contentDocument;
+    if (!d.getElementById('tablonCss')) {
+      const st = d.createElement('style'); st.id = 'tablonCss'; st.textContent = CSS_VISOR; d.head.appendChild(st);
+    }
+    temaVisor();
+  } catch (e) { /* si algún día el visor cambia de sitio, se ve tal cual */ }
+}
+function temaOscuro() {
+  const t = document.documentElement.dataset.theme;
+  return t === 'dark' || (!t && matchMedia('(prefers-color-scheme: dark)').matches);
+}
+function temaVisor() {
+  try { $('#v-territorios iframe')?.contentDocument?.body?.classList.toggle('light', !temaOscuro()); } catch {}
 }
 addEventListener('resize', ajustarVisor);
 
@@ -684,6 +708,7 @@ function show(v) {
   vista = v;
   document.querySelectorAll('nav.tabs button').forEach(b => b.classList.toggle('on', b.dataset.v === v));
   document.querySelectorAll('.view').forEach(s => s.classList.toggle('on', s.id === 'v-' + v));
+  document.body.classList.toggle('ver-territorios', v === 'territorios');
   ({ tablon: renderBoard, informe: renderInforme, grupo: renderGrupo, territorios: renderTerritorios, admin: renderAdmin })[v]();
   scrollTo(0, 0);
 }
@@ -694,6 +719,7 @@ function aplicarTema(t, avisar) {
   const osc = t === 'dark' || (t !== 'light' && matchMedia('(prefers-color-scheme: dark)').matches);
   document.querySelectorAll('meta[name="theme-color"]').forEach(m => m.setAttribute('content', osc ? '#000000' : '#f2f2f7'));
   $('#btnTema').textContent = TEMAS[t][0]; $('#btnTema').title = 'Tema: ' + TEMAS[t][1];
+  temaVisor();
   if (avisar) toast('Tema ' + TEMAS[t][1]);
 }
 let temaActual = ['light', 'dark'].includes(store.get('tablon_tema')) ? store.get('tablon_tema') : 'auto';
