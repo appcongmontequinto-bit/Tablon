@@ -73,12 +73,14 @@
   a { color: var(--primary); }
   svg.i { width: 1em; height: 1em; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; flex: none; }
 
-  body > header { position: sticky; top: 0; z-index: 5; background: var(--bar); transform: translateZ(0);
+  body > header { position: sticky; top: 0; z-index: 5; background: var(--bar);
     border-bottom: .5px solid var(--line);
     padding: calc(10px + env(safe-area-inset-top)) 16px 10px; display: flex; align-items: center; gap: 12px; }
   body > header .t { flex: 1; min-width: 0; }
   body > header h1 { margin: 0; font-size: 1.6rem; font-weight: 800; letter-spacing: -.02em; line-height: 1.15; }
   body > header small { color: var(--muted); display: block; font-size: .9rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  body > header button.girando { animation: sp .7s linear infinite; }
+  body > header button:active { transform: scale(.92); }
   body > header button { background: var(--fill); color: var(--primary); border: 0; border-radius: 50%; width: 36px; height: 36px;
     font-size: 1.1rem; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; }
   main { max-width: 760px; margin: 0 auto; padding: 14px 16px calc(96px + env(safe-area-inset-bottom)); }
@@ -129,6 +131,8 @@
   .when { display: inline-flex; gap: 6px; align-items: center; background: var(--primary-soft); color: var(--primary);
     padding: 5px 10px; border-radius: 10px; font-size: .86rem; font-weight: 600; margin-top: 6px; }
   .t-actividad .when { background: var(--c-actividad-soft); color: var(--c-actividad); }
+  .mesfijo { margin: 12px 0 2px; padding: 10px 14px; border-radius: 12px; background: var(--primary-soft); color: var(--primary); font-size: 1.02rem; }
+  .mesfijo b { text-transform: capitalize; }
   .rp { margin-top: 8px; border-radius: 14px; background: var(--c-actividad-soft); padding: 12px 14px; }
   .rp-prox { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
   .rp-prox small { width: 100%; font-size: .72rem; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--c-actividad); }
@@ -458,7 +462,15 @@ const ym = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}
 function mesLabel(m) { const [y, mm] = m.split('-'); return `${MESES[+mm - 1]} ${y}`; }
 function prevMonth() { const d = new Date(); d.setDate(1); d.setMonth(d.getMonth() - 1); return ym(d); }
 /** Mes que toca informar: del 25 a fin de mes, el mes en curso (muchos informan la última semana); antes, el anterior */
-function mesInforme() { return new Date().getDate() >= 25 ? ym(new Date()) : prevMonth(); }
+function mesInforme() {
+  if (typeof state !== 'undefined' && state.mesFijo) return state.mesFijo;   // el que fija el admin
+  return new Date().getDate() >= 25 ? ym(new Date()) : prevMonth();
+}
+/** Carga el mes del informe fijado por el admin (lo usan todos) */
+async function cargarMesFijo() {
+  try { const m = await q(sb.rpc('mes_informe')); if (/^\d{4}-\d{2}$/.test(m || '')) state.mesFijo = m; } catch { /* sin conexión: se calcula */ }
+  infMes = null; grpMes = null; repMes = mesInforme();
+}
 function lastMonths(n) {
   const out = [], d = new Date(); d.setDate(1);
   for (let i = 0; i < n; i++) { out.push(ym(d)); d.setMonth(d.getMonth() - 1); }
@@ -569,7 +581,7 @@ async function arrancarGestion(perfil) {
       b.querySelector('.ic').innerHTML = svgI('<path d="M5 20V11M12 20V5M19 20v-6"/>');
     }
     show('tablon');
-    await Promise.all([cargarCerrados(), loadBoard()]);
+    await Promise.all([cargarCerrados(), loadBoard(), cargarMesFijo()]);
   } catch (e) {
     $('#board').innerHTML = `<div class="empty">⚠️ ${esc(e.message)}</div>`;
   }
@@ -597,7 +609,7 @@ async function bootGrupo() {
   $('#btnRefresh').hidden = false;
   document.querySelector('[data-v="grupo"]').hidden = true;
   document.querySelector('[data-v="admin"]').hidden = true;
-  await loadBoard();
+  await Promise.all([loadBoard(), cargarMesFijo()]);
 }
 
 async function cargarCerrados() {
@@ -635,12 +647,16 @@ $('#btnTema').onclick = () => {
 matchMedia('(prefers-color-scheme: dark)').addEventListener?.('change', () => aplicarTema(temaActual));
 
 $('#btnLock').onclick = async () => {
+  $('#btnLock').disabled = true;
   await sb.rpc('gestion_bloquear').catch(() => {});
-  if (state.me) { state.me.pin_hasta = null; pedirPinGestion(state.me); }
+  $('#btnLock').disabled = false;
+  if (state.me) { state.me.pin_hasta = null; pedirPinGestion(state.me); toast('🔒 Gestión bloqueada. Pon tu PIN para volver.'); }
 };
-$('#btnRefresh').onclick = async () => {
-  await cargarCerrados().catch(() => {});
-  if (vista === 'tablon') loadBoard(); else show(vista);
+/* ↻ Actualizar: se nota (gira) y recarga la app entera, así también llega la última versión */
+$('#btnRefresh').onclick = () => {
+  $('#btnRefresh').classList.add('girando');
+  toast('Actualizando…');
+  setTimeout(() => location.reload(), 250);
 };
 document.querySelectorAll('#filters .chip').forEach(c => c.onclick = () => {
   state.filter = c.dataset.f;
@@ -930,7 +946,7 @@ let infMes = null;
 async function renderInforme() {
   if (esModoGrupo()) return renderInformeGrupo();
   const el = $('#v-informe');
-  infMes = infMes || mesInforme();
+  infMes = esAdmin() ? (infMes || mesInforme()) : mesInforme();
   el.innerHTML = SPIN;
   try {
     const mis = await q(sb.from('informes').select('*').eq('publicador_id', state.me.id).order('mes', { ascending: false }).limit(12));
@@ -940,14 +956,15 @@ async function renderInforme() {
 
 /** Formulario + historial. guardar = función propia en modo grupo (PIN); null = sesión normal */
 function pintarInforme(el, pub, mis, guardar) {
-  infMes = infMes || mesInforme();
+  const eligeMes = !guardar && esAdmin();   // los hermanos no tocan el mes: lo fija el admin
+  infMes = eligeMes ? (infMes || mesInforme()) : mesInforme();
   el.innerHTML = `
     <div class="card">
       <h3>Informe de predicación</h3>
       ${guardar ? `<p class="muted" style="margin:0">Hola, ${esc(pub.nombre)} ·
         <a href="#" id="noSoy">No soy ${esc(pub.nombre.split(' ')[0])}</a></p>` : ''}
-      <label for="infMes">Mes</label>
-      <select id="infMes">${mesOptions(4, infMes)}</select>
+      ${eligeMes ? `<label for="infMes">Mes</label><select id="infMes">${mesOptions(4, infMes)}</select>`
+        : `<div class="mesfijo">Informe de <b>${mesLabel(infMes)}</b></div>`}
       <div id="infForm"></div>
     </div>
     ${mis.length ? `<div class="section-title">Mis informes</div><div class="card table-wrap"><table>
@@ -956,7 +973,7 @@ function pintarInforme(el, pub, mis, guardar) {
         <td>${r.participo ? 'Sí' : 'No'}${r.auxiliar ? ' <span class="pill">Aux</span>' : ''}</td>
         <td class="n">${r.cursos}</td><td class="n">${r.regular || r.auxiliar ? num(r.horas) : '—'}</td></tr>`).join('')}
     </table></div>` : ''}`;
-  $('#infMes').onchange = e => { infMes = e.target.value; renderInforme(); };
+  if ($('#infMes')) $('#infMes').onchange = e => { infMes = e.target.value; renderInforme(); };
   if ($('#noSoy')) $('#noSoy').onclick = async e => {
     e.preventDefault();
     await sb.rpc('dispositivo_salir', { p_llave: state.llave }).catch(() => {});
@@ -1493,7 +1510,23 @@ async function cargarDatos(desde, hasta, grupo = null) {
 
 /* Informes de la congregación */
 async function adminInformes() {
-  $('#aBody').innerHTML = `<div class="card"><label for="iMes">Mes</label><select id="iMes">${mesOptions(12, repMes)}</select></div><div id="iRes">${SPIN}</div>`;
+  $('#aBody').innerHTML = `
+    ${esAdmin() ? `<div class="card">
+      <h3 style="margin-top:0">Mes que informan los hermanos</h3>
+      <p class="muted" style="margin:0">Es el único mes que verán en «Mi informe». Cámbialo cuando empiece la recogida del siguiente.</p>
+      <div class="grid2" style="align-items:end"><div><label for="mFijo">Mes</label><select id="mFijo">${mesOptions(4, mesInforme())}</select></div>
+        <div><button class="btn block" id="mFijoOk">Guardar</button></div></div>
+    </div>` : ''}
+    <div class="card"><label for="iMes">Ver informes de</label><select id="iMes">${mesOptions(12, repMes)}</select></div><div id="iRes">${SPIN}</div>`;
+  if ($('#mFijoOk')) $('#mFijoOk').onclick = async e => {
+    const done = busy(e.target, 'Guardando…');
+    try {
+      state.mesFijo = await q(sb.rpc('fijar_mes_informe', { p_mes: $('#mFijo').value }));
+      infMes = null; grpMes = null; repMes = state.mesFijo;
+      toast(`✓ Los hermanos informan ahora de ${mesLabel(state.mesFijo)}`);
+      adminInformes();
+    } catch (err) { toast('⚠️ ' + err.message); done(); }
+  };
   $('#iMes').onchange = e => { repMes = e.target.value; adminInformes(); };
   try {
     const [d, ents] = await Promise.all([cargarDatos(repMes, repMes), q(sb.from('entregas').select('*').eq('mes', repMes))]);
