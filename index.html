@@ -83,6 +83,8 @@
   body > header button:active { transform: scale(.92); }
   body > header button { background: var(--fill); color: var(--primary); border: 0; border-radius: 50%; width: 36px; height: 36px;
     font-size: 1.1rem; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; }
+  .ter-bar { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; font-weight: 600; }
+  .ter-frame { display: block; width: 100%; border: 0; border-radius: 14px; background: var(--card); min-height: 320px; }
   main { max-width: 760px; margin: 0 auto; padding: 14px 16px calc(96px + env(safe-area-inset-bottom)); }
   nav.tabs { position: fixed; left: 0; right: 0; bottom: 0; z-index: 20; display: flex; background: var(--bar);
     transform: translateZ(0); will-change: transform; backface-visibility: hidden;
@@ -297,6 +299,7 @@
   </section>
   <section class="view" id="v-informe"></section>
   <section class="view" id="v-grupo"></section>
+  <section class="view" id="v-territorios"></section>
   <section class="view" id="v-admin"></section>
 </main>
 
@@ -304,6 +307,7 @@
   <button class="on" data-v="tablon"><span class="ic"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="4" width="17" height="16" rx="3.5"/><path d="M8 9h8M8 13h8M8 17h5"/></svg></span><span class="lb">Tablón</span></button>
   <button data-v="informe"><span class="ic"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 3H7.5A2.5 2.5 0 0 0 5 5.5v13A2.5 2.5 0 0 0 7.5 21h9a2.5 2.5 0 0 0 2.5-2.5V8z"/><path d="M14 3v5h5M9 13h6M9 17h4"/></svg></span><span class="lb">Mi informe</span></button>
   <button data-v="grupo" hidden><span class="ic"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 19.5a5.5 5.5 0 0 1 11 0"/><circle cx="17" cy="9" r="2.5"/><path d="M16 14.3a4.5 4.5 0 0 1 4.5 5.2"/></svg></span><span class="lb">Mi grupo</span></button>
+  <button data-v="territorios" hidden><span class="ic"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4 3.5 6v14L9 18l6 2 5.5-2V4L15 6z"/><path d="M9 4v14M15 6v14"/></svg></span><span class="lb">Territorios</span></button>
   <button data-v="admin" hidden><span class="ic"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2.2"/><circle cx="9" cy="17" r="2.2"/></svg></span><span class="lb">Admin</span></button>
 </nav>
 
@@ -579,6 +583,7 @@ async function arrancarGestion(perfil) {
     $('#btnRefresh').hidden = false;
     document.querySelector('[data-v="grupo"]').hidden = !(esSuper() || esAdmin());   // el secretario ve los grupos desde Informes
     document.querySelector('[data-v="admin"]').hidden = !esGestor();
+    pestanaTerritorios(perfil.visor);
     document.querySelector('[data-v="informe"]').hidden = esSecre();   // su informe lo envía con el enlace del grupo y su PIN
     if (esSecre()) {
       const b = document.querySelector('[data-v="admin"]');
@@ -614,6 +619,9 @@ async function bootGrupo() {
   $('#btnRefresh').hidden = false;
   document.querySelector('[data-v="grupo"]').hidden = true;
   document.querySelector('[data-v="admin"]').hidden = true;
+  pestanaTerritorios(null);
+  if (state.llave) sb.rpc('dispositivo_datos', { p_llave: state.llave })
+    .then(({ data }) => pestanaTerritorios(data?.perfil?.visor)).catch(() => {});
   await Promise.all([loadBoard(), cargarMesFijo()]);
 }
 
@@ -623,6 +631,52 @@ async function cargarCerrados() {
   state.cerrados = new Set(rows.map(r => r.mes));
 }
 
+/* ─────────── Territorios: el visor de la app Territorios de cada hermano ───────────
+   Solo aparece a quien el admin le haya enlazado su visor. Desde el enlace del grupo hace falta el PIN. */
+const VISOR_TERRITORIOS = 'https://appcongmontequinto-bit.github.io/visor-montequinto/';
+function pestanaTerritorios(visor) {
+  document.querySelector('[data-v="territorios"]').hidden = !visor;
+  if (!visor) { const el = $('#v-territorios'); el.innerHTML = ''; delete el.dataset.url; if (vista === 'territorios') show('tablon'); }
+}
+async function renderTerritorios() {
+  const el = $('#v-territorios');
+  let visor = state.me?.visor || null;
+  if (esModoGrupo()) {
+    visor = null;
+    if (state.llave) {
+      if (!el.dataset.url) el.innerHTML = SPIN;
+      try {
+        const d = await q(sb.rpc('dispositivo_datos', { p_llave: state.llave }));
+        if (d) visor = d.perfil.visor; else { store.del(claveLlave()); state.llave = null; }
+      } catch (e) { el.innerHTML = `<div class="empty">⚠️ ${esc(e.message)}</div>`; delete el.dataset.url; return; }
+    }
+    if (!state.llave) {
+      delete el.dataset.url;
+      el.innerHTML = `<div class="card" style="text-align:center"><div style="font-size:2.2rem">🔒</div>
+        <h3>Pon tu PIN para ver tus territorios</h3><p class="muted">Por seguridad se pide cada hora.</p>
+        <button class="btn block" id="terPin">Poner mi PIN</button></div>`;
+      $('#terPin').onclick = () => show('informe');
+      return;
+    }
+  }
+  if (!visor) { pestanaTerritorios(null); return; }
+  const url = VISOR_TERRITORIOS + '#p=' + encodeURIComponent(visor);
+  if (el.dataset.url !== url) {   // no se recarga cada vez que se entra en la pestaña
+    el.dataset.url = url;
+    el.innerHTML = `<div class="ter-bar"><span>🗺️ Mis territorios</span>
+        <a class="btn ghost sm" href="${url}" target="_blank" rel="noopener">Abrir aparte ↗</a></div>
+      <iframe class="ter-frame" src="${url}" title="Mis territorios" allow="geolocation; fullscreen"></iframe>`;
+  }
+  requestAnimationFrame(ajustarVisor);
+}
+function ajustarVisor() {
+  const f = $('#v-territorios iframe');
+  if (!f || vista !== 'territorios') return;
+  const nav = $('nav.tabs').getBoundingClientRect().height || 0;
+  f.style.height = Math.max(320, innerHeight - f.getBoundingClientRect().top - nav - 10) + 'px';
+}
+addEventListener('resize', ajustarVisor);
+
 /* ─────────── Navegación ─────────── */
 let vista = 'tablon';
 document.querySelectorAll('nav.tabs button').forEach(b => b.onclick = () => show(b.dataset.v));
@@ -630,7 +684,7 @@ function show(v) {
   vista = v;
   document.querySelectorAll('nav.tabs button').forEach(b => b.classList.toggle('on', b.dataset.v === v));
   document.querySelectorAll('.view').forEach(s => s.classList.toggle('on', s.id === 'v-' + v));
-  ({ tablon: renderBoard, informe: renderInforme, grupo: renderGrupo, admin: renderAdmin })[v]();
+  ({ tablon: renderBoard, informe: renderInforme, grupo: renderGrupo, territorios: renderTerritorios, admin: renderAdmin })[v]();
   scrollTo(0, 0);
 }
 /* Tema: automático (como el móvil) → claro → oscuro */
@@ -1008,6 +1062,7 @@ function pintarInforme(el, pub, mis, guardar) {
     e.preventDefault();
     await sb.rpc('dispositivo_salir', { p_llave: state.llave }).catch(() => {});
     store.del(claveLlave()); store.del(claveUltimo()); state.llave = null; state.dev = null; state.pend = null;
+    pestanaTerritorios(null);
     renderInforme();
   };
   informeForm($('#infForm'), { pub, mes: infMes, existente: mis.find(r => r.mes === infMes), propio: true,
@@ -1027,6 +1082,7 @@ async function renderInformeGrupo() {
       const d = await q(sb.rpc('dispositivo_datos', { p_llave: state.llave }));
       if (d) {
         state.dev = d.perfil;
+        pestanaTerritorios(d.perfil.visor);
         state.cerrados = new Set(d.cerrados || []);
         $('#hello').textContent = `${d.perfil.nombre} · ${d.perfil.grupo}`;
         const guardar = async row => {
@@ -1043,6 +1099,7 @@ async function renderInformeGrupo() {
         };
         return pintarInforme(el, d.perfil, d.informes || [], guardar);
       }
+      pestanaTerritorios(null);
       store.del(claveLlave()); state.llave = null;   // pasó la hora, PIN nuevo o baja: se vuelve a pedir
     }
     const g = await q(sb.rpc('grupo_nombres', { p_codigo: GRUPO }));
@@ -1637,7 +1694,7 @@ async function adminInformes() {
 }
 
 /* Publicadores y grupos */
-const PUB_COLS = 'id,nombre,grupo_id,precursor,rol,telefono,activo,tiene_enlace,tiene_pin';
+const PUB_COLS = 'id,nombre,grupo_id,precursor,rol,telefono,activo,tiene_enlace,tiene_pin,visor_territorios';
 function rolOptions(sel) {
   const roles = ['publicador', 'auxiliar', 'superintendente', 'secretario', ...(state.me.rol === 'admin' ? ['admin'] : [])];
   return roles.map(r => `<option value="${r}" ${r === sel ? 'selected' : ''}>${ROLES[r]}</option>`).join('');
@@ -1683,7 +1740,7 @@ async function adminPublicadores() {
         <div class="li">
           <div style="min-width:0"><div class="nm">${esc(p.nombre)} ${p.precursor ? '<span class="pill">PR</span>' : ''}
             ${p.rol !== 'publicador' ? `<span class="pill">${ROLES[p.rol]}</span>` : ''}</div>
-            <div class="sub">${p.tiene_pin ? '🔢 Con PIN' : '<span class="st pend">Sin PIN aún</span>'}${p.rol !== 'publicador' ? (p.tiene_enlace ? ' · 🔗 Con enlace de gestión' : ' · <span class="st pend">Sin enlace de gestión</span>') : ''}${p.telefono ? ' · ' + esc(p.telefono) : ''}</div></div>
+            <div class="sub">${p.tiene_pin ? '🔢 Con PIN' : '<span class="st pend">Sin PIN aún</span>'}${p.rol !== 'publicador' ? (p.tiene_enlace ? ' · 🔗 Con enlace de gestión' : ' · <span class="st pend">Sin enlace de gestión</span>') : ''}${p.visor_territorios ? ' · 🗺️ Territorios' : ''}${p.telefono ? ' · ' + esc(p.telefono) : ''}</div></div>
           <div class="acts">
             ${p.tiene_pin ? `<button class="btn sec icon" title="Restablecer PIN" data-pin="${p.id}">🔢</button>` : ''}
             ${p.rol !== 'publicador' ? `<button class="btn sec icon" title="Enlace de gestión" data-lnk="${p.id}">🔗</button>` : ''}
@@ -1743,14 +1800,26 @@ function editarPublicador(p, grupos) {
     </div>
     <label>Función</label><select id="eRol">${rolOptions(p.rol)}</select>
     <label class="check"><input type="checkbox" id="ePr" ${p.precursor ? 'checked' : ''}> Precursor regular</label>
+    ${esAdmin() ? `<label>Visor de Territorios</label>
+    <input id="eVisor" inputmode="url" placeholder="Pega su enlace del visor (…/visor-montequinto/#p=12)" value="${p.visor_territorios ? VISOR_TERRITORIOS + '#p=' + p.visor_territorios : ''}">
+    <p class="muted" style="margin:4px 0 0;font-size:.85rem">Si lo rellenas, le aparece la pestaña «Territorios». Déjalo vacío para quitarla.</p>` : ''}
     <div class="row"><button class="btn" id="eSave">Guardar</button><button class="btn danger" id="eBaja">Dar de baja</button></div>`);
   s.querySelector('#eSave').onclick = async () => {
     try {
+      const iv = s.querySelector('#eVisor'), txt = iv ? iv.value.trim() : '';
+      const mv = txt.match(/[#?&]p=(\d+)/) || txt.match(/^(\d+)$/);
+      if (txt && !mv) throw new Error('El enlace del visor no es válido: debe terminar en #p= y un número');
       await q(sb.from('publicadores').update({
         nombre: s.querySelector('#eNom').value.trim(), grupo_id: +s.querySelector('#eGru').value || null,
         telefono: s.querySelector('#eTel').value.trim() || null, rol: s.querySelector('#eRol').value,
         precursor: s.querySelector('#ePr').checked
       }).eq('id', p.id).select('id').single());
+      if (iv) {
+        const nuevo = mv ? +mv[1] : null;
+        if (nuevo !== (p.visor_territorios || null))
+          await q(sb.rpc('fijar_visor_territorios', { p_pub: p.id, p_visor: nuevo }));
+        if (p.id === state.me?.id) { state.me.visor = nuevo; pestanaTerritorios(nuevo); }
+      }
       closeModal(); toast('✓ Guardado'); adminPublicadores();
     } catch (e) { toast('⚠️ ' + e.message); }
   };
