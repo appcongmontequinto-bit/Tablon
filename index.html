@@ -73,15 +73,18 @@
   a { color: var(--primary); }
   svg.i { width: 1em; height: 1em; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; flex: none; }
 
+  /* Cabecera compacta, estilo barra de navegación de iOS */
   body > header { position: sticky; top: 0; z-index: 5; background: var(--bar);
     border-bottom: .5px solid var(--line);
-    padding: calc(10px + env(safe-area-inset-top)) 16px 10px; display: flex; align-items: center; gap: 12px; }
-  body > header .t { flex: 1; min-width: 0; }
-  body > header h1 { margin: 0; font-size: 1.6rem; font-weight: 800; letter-spacing: -.02em; line-height: 1.15; }
-  body > header small { color: var(--muted); display: block; font-size: .9rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    padding: calc(8px + env(safe-area-inset-top)) 16px 8px; display: flex; align-items: center; gap: 10px; }
+  body > header .logo { width: 34px; height: 34px; border-radius: 8px; flex: none; }
+  body > header .t { flex: 1; min-width: 0; line-height: 1.2; }
+  body > header h1 { margin: 0; font-size: 1.0625rem; font-weight: 600; letter-spacing: -.01em;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  body > header small { color: var(--muted); display: block; font-size: .8rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   body > header button.girando { animation: sp .7s linear infinite; }
   body > header button:active { transform: scale(.92); }
-  body > header button { background: var(--fill); color: var(--primary); border: 0; border-radius: 50%; width: 36px; height: 36px;
+  body > header button { background: var(--fill); color: var(--primary); border: 0; border-radius: 50%; width: 34px; height: 34px; flex: none;
     font-size: 1.1rem; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; }
   /* Territorios: el visor ocupa toda la pantalla entre la cabecera y la barra de abajo, como una pestaña más */
   body.ver-territorios main { padding: 0; max-width: none; }
@@ -278,13 +281,14 @@
 <body>
 
 <header>
+  <img class="logo" src="icons/icon-192.png" alt="" width="34" height="34">
   <div class="t">
     <h1 id="congName">Tablón</h1>
     <small id="hello"></small>
   </div>
-  <button id="btnTema" title="Tema: automático" aria-label="Cambiar tema claro u oscuro">◐</button>
-  <button id="btnLock" title="Bloquear" aria-label="Bloquear" hidden>🔒</button>
-  <button id="btnRefresh" title="Actualizar" aria-label="Actualizar" hidden>↻</button>
+  <button id="btnTema" title="Tema: automático" aria-label="Cambiar tema claro u oscuro"><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 3.5a8.5 8.5 0 0 1 0 17z" fill="currentColor"/></svg></button>
+  <button id="btnLock" title="Bloquear" aria-label="Bloquear" hidden><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="10.5" width="14" height="10" rx="2.5"/><path d="M8.5 10.5v-3a3.5 3.5 0 0 1 7 0v3"/></svg></button>
+  <button id="btnRefresh" title="Actualizar" aria-label="Actualizar" hidden><svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M19.5 12a7.5 7.5 0 1 1-2.2-5.3"/><path d="M19.5 4.5v4h-4"/></svg></button>
 </header>
 
 <main>
@@ -426,7 +430,8 @@ const esModoGrupo = () => state.modo === 'grupo';
 const claveLlave = () => 'tablon_llave_' + GRUPO;
 const claveUltimo = () => 'tablon_ultimo_' + GRUPO;   // último nombre usado en este móvil (no da acceso: solo evita buscarlo en la lista)
 
-$('#congName').textContent = CONGREGACION;
+$('#congName').textContent = CONGREGACION.replace(/^congregaci[oó]n\s+/i, '');   // en la cabecera basta «Montequinto»
+$('#congName').title = CONGREGACION;
 
 /* ─────────── Utilidades ─────────── */
 function traducir(err) {
@@ -713,12 +718,12 @@ function show(v) {
   scrollTo(0, 0);
 }
 /* Tema: automático (como el móvil) → claro → oscuro */
-const TEMAS = { auto: ['◐', 'automático (como el móvil)'], light: ['☀︎', 'claro'], dark: ['☾', 'oscuro'] };
+const TEMAS = { auto: ['<svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 3.5a8.5 8.5 0 0 1 0 17z" fill="currentColor"/></svg>', 'automático (como el móvil)'], light: ['<svg class="i" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M4.6 4.6l1.4 1.4M18 18l1.4 1.4M2.5 12h2M19.5 12h2M4.6 19.4 6 18M18 6l1.4-1.4"/></svg>', 'claro'], dark: ['<svg class="i" viewBox="0 0 24 24" aria-hidden="true"><path d="M19.5 14.5A8 8 0 1 1 9.5 4.5a6.5 6.5 0 0 0 10 10z"/></svg>', 'oscuro'] };
 function aplicarTema(t, avisar) {
   if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t; else delete document.documentElement.dataset.theme;
   const osc = t === 'dark' || (t !== 'light' && matchMedia('(prefers-color-scheme: dark)').matches);
   document.querySelectorAll('meta[name="theme-color"]').forEach(m => m.setAttribute('content', osc ? '#000000' : '#f2f2f7'));
-  $('#btnTema').textContent = TEMAS[t][0]; $('#btnTema').title = 'Tema: ' + TEMAS[t][1];
+  $('#btnTema').innerHTML = TEMAS[t][0]; $('#btnTema').title = 'Tema: ' + TEMAS[t][1];
   temaVisor();
   if (avisar) toast('Tema ' + TEMAS[t][1]);
 }
