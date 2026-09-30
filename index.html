@@ -737,6 +737,7 @@ function itemCard(it, admin = false) {
     ? `<button class="btn sm" onclick="verPdf('${it.id}')">📄 Ver PDF</button>`
     : `<a class="btn sec sm" href="${esc(url)}" target="_blank" rel="noopener">${isImg(it) ? '🔍 Abrir original' : '📎 Abrir archivo'}</a>`;
   const adminBtns = admin ? `
+      <button class="btn sm" onclick="editarItem('${it.id}')">✏️ Editar</button>
       <button class="btn sec sm" onclick="avisarGrupo('${it.id}')">📣 Avisar al grupo</button>
       <button class="btn ghost sm" onclick="pinItem('${it.id}')">${it.fijado ? '📍 Desfijar' : '📌 Fijar'}</button>
       <button class="btn danger sm" onclick="deleteItem('${it.id}')">🗑 Borrar</button>` : '';
@@ -1275,8 +1276,18 @@ function renderAdmin() {
 }
 
 /* Publicar */
+/** Editar una publicación: abre el formulario de Publicar ya relleno */
+function editarItem(id) {
+  state.editando = state.items.find(i => i.id === id) || null;
+  adminTab = 'publicar'; renderAdmin(); scrollTo(0, 0);
+}
+const aInputLocal = iso => { const d = new Date(iso); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 16); };
+
 function adminPublicar() {
+  const ed = state.editando; state.editando = null;   // publicación que se está editando (o null = nueva)
   $('#aBody').innerHTML = `<div class="card">
+    ${ed ? `<div class="notice info" style="display:flex;align-items:center;gap:8px;justify-content:space-between">
+      <span>✏️ Editando: <b>${esc(ed.titulo)}</b></span><button class="btn ghost sm" id="pCancelar">Cancelar</button></div>` : ''}
     <label for="pTipo">Tipo</label>
     <select id="pTipo"><option value="cuadrante">Cuadrante</option><option value="actividad">Actividad</option><option value="anuncio">Anuncio</option></select>
     <label for="pTit">Título</label><input id="pTit" maxlength="200" placeholder="Ej: Programa reunión entre semana — octubre">
@@ -1292,13 +1303,17 @@ function adminPublicar() {
         <p class="muted" id="pRepPrev" style="margin:10px 4px 0"></p>
       </div>
     </div>
-    <label for="pFile">Archivo (PDF o imagen, opcional)</label><input id="pFile" type="file" accept="application/pdf,image/*">
+    <label for="pFile">${ed?.archivo_path ? 'Cambiar archivo (opcional)' : 'Archivo (PDF o imagen, opcional)'}</label>
+    ${ed?.archivo_path ? `<div class="muted" style="margin:0 4px 6px">Actual: 📎 ${esc(ed.archivo_nombre || 'archivo')}
+      <label class="check" style="margin-top:6px"><input type="checkbox" id="pQuitarArch"> Quitar el archivo</label></div>` : ''}
+    <input id="pFile" type="file" accept="application/pdf,image/*">
     <label class="check"><input type="checkbox" id="pPin"> Fijar arriba del todo</label>
-    <div class="row"><button class="btn block" id="pGo">Publicar</button></div></div>`;
+    <div class="row"><button class="btn block" id="pGo">${ed ? 'Guardar cambios' : 'Publicar'}</button></div></div>`;
   const tipo = $('#pTipo');
   tipo.onchange = () => { $('#pFechaBox').hidden = tipo.value !== 'actividad'; };
   // Fecha fija o repetición mensual
-  let cuando = 'fija', reglas = [{ sem: [], dia: 6, hora: '' }];
+  let cuando = ed?.repeticion?.reglas?.length ? 'repite' : 'fija';
+  let reglas = ed?.repeticion?.reglas?.length ? JSON.parse(JSON.stringify(ed.repeticion.reglas)) : [{ sem: [], dia: 6, hora: '' }];
   const pintarReglas = () => {
     $('#pReglas').innerHTML = reglas.map((r, i) => `
       <div class="regla" data-i="${i}">
@@ -1340,6 +1355,15 @@ function adminPublicar() {
   };
   $('#pMasRegla').onclick = () => { reglas.push({ sem: [], dia: 0, hora: '' }); pintarReglas(); };
 
+  // Rellenar con lo que ya tiene la publicación
+  if (ed) {
+    tipo.value = ed.tipo; $('#pTit').value = ed.titulo; $('#pTxt').value = ed.texto || ''; $('#pPin').checked = !!ed.fijado;
+    if (ed.fecha_evento) $('#pFecha').value = aInputLocal(ed.fecha_evento);
+    tipo.onchange();
+    if (cuando === 'repite') $('#pCuando [data-c="repite"]').click();
+    $('#pCancelar').onclick = () => { adminTab = 'gestionar'; renderAdmin(); };
+  }
+
   $('#pGo').onclick = async e => {
     const titulo = $('#pTit').value.trim();
     if (!titulo) return toast('Falta el título');
@@ -1347,17 +1371,30 @@ function adminPublicar() {
     const repite = esAct && cuando === 'repite';
     if (repite && !reglasValidas().length) return toast('Marca al menos una semana del mes (1.º, 2.º…)');
     const fecha = esAct && !repite && $('#pFecha').value ? new Date($('#pFecha').value).toISOString() : null;
-    const done = busy(e.target, 'Subiendo…');
+    const done = busy(e.target, ed ? 'Guardando…' : 'Subiendo…');
     try {
       const row = { tipo: tipo.value, titulo, texto: $('#pTxt').value.trim(), fecha_evento: fecha, fijado: $('#pPin').checked,
                     repeticion: repite ? { reglas: reglasValidas() } : null };
       const f = $('#pFile').files[0];
+      const quitar = !f && $('#pQuitarArch')?.checked;
+      if (quitar) Object.assign(row, { archivo_path: null, archivo_nombre: null, archivo_tipo: null });
       if (f) {
         const { blob, name, type } = await prepareFile(f);
         const safe = name.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^\w.-]+/g, '_').slice(-80);
         const path = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}-${safe}`;
         await q(sb.storage.from(BUCKET).upload(path, blob, { contentType: type, upsert: false }));
         Object.assign(row, { archivo_path: path, archivo_nombre: name, archivo_tipo: type });
+      }
+      if (ed) {
+        await q(sb.from('tablon').update(row).eq('id', ed.id).select().single());
+        // el archivo anterior se borra si se ha cambiado o quitado
+        if (ed.archivo_path && (f || quitar)) await sb.storage.from(BUCKET).remove([ed.archivo_path]).catch(() => {});
+        if (ed.archivo_path) delete state.urls[ed.archivo_path];
+        await loadBoard();
+        adminTab = 'gestionar'; renderAdmin();
+        toast('✓ Cambios guardados');
+        avisarGrupo(ed.id, false);
+        return;
       }
       const nuevo = await q(sb.from('tablon').insert(row).select().single());
       await loadBoard();
