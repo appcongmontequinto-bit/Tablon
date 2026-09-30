@@ -9,6 +9,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Tablón">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
+<script>try { const t = localStorage.getItem('tablon_tema'); if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t; } catch {}</script>
 <link rel="manifest" href="manifest.webmanifest" id="lnkManifest">
 <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
@@ -26,11 +27,13 @@
     --c-actividad: #8944ab; --c-actividad-soft: rgba(175,82,222,.14);
     --c-anuncio: #248a3d;   --c-anuncio-soft: rgba(52,199,89,.15);
     --pin: #ff9500;
+    --bg-anuncio: #f1faf3; --bg-actividad: #f8f2fc;
     --radius: 18px; --shadow: 0 1px 2px rgba(0,0,0,.04), 0 6px 20px rgba(0,0,0,.05);
     --bar: rgba(249,249,251,.82);
   }
+  /* Oscuro: automático según el móvil, salvo que se elija Claro u Oscuro en ◐ */
   @media (prefers-color-scheme: dark) {
-    :root {
+    :root:not([data-theme="light"]) {
       --bg: #000000; --card: #1c1c1e; --card2: #2c2c2e; --fill: rgba(118,118,128,.24);
       --text: #ffffff; --muted: #98989f; --line: rgba(84,84,88,.55);
       --primary: #0a84ff; --primary-soft: rgba(10,132,255,.2);
@@ -41,8 +44,23 @@
       --c-actividad: #bf5af2; --c-actividad-soft: rgba(191,90,242,.2);
       --c-anuncio: #30d158;   --c-anuncio-soft: rgba(48,209,88,.18);
       --pin: #ff9f0a;
+      --bg-anuncio: #16241a; --bg-actividad: #211a29;
       --shadow: none; --bar: rgba(22,22,24,.82);
     }
+  }
+  :root[data-theme="dark"] {
+    --bg: #000000; --card: #1c1c1e; --card2: #2c2c2e; --fill: rgba(118,118,128,.24);
+    --text: #ffffff; --muted: #98989f; --line: rgba(84,84,88,.55);
+    --primary: #0a84ff; --primary-soft: rgba(10,132,255,.2);
+    --ok: #30d158; --ok-soft: rgba(48,209,88,.18);
+    --warn: #ff9f0a; --warn-soft: rgba(255,159,10,.18);
+    --danger: #ff453a; --danger-soft: rgba(255,69,58,.18);
+    --c-cuadrante: #0a84ff; --c-cuadrante-soft: rgba(10,132,255,.2);
+    --c-actividad: #bf5af2; --c-actividad-soft: rgba(191,90,242,.2);
+    --c-anuncio: #30d158;   --c-anuncio-soft: rgba(48,209,88,.18);
+    --pin: #ff9f0a;
+    --bg-anuncio: #16241a; --bg-actividad: #211a29;
+    --shadow: none; --bar: rgba(22,22,24,.82);
   }
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   [hidden] { display: none !important; }
@@ -88,6 +106,8 @@
   .card { background: var(--card); border-radius: var(--radius); box-shadow: var(--shadow);
     padding: 14px 16px; margin-bottom: 12px; }
   .card.past { opacity: .55; }
+  .card.t-anuncio { background: var(--bg-anuncio); }
+  .card.t-actividad { background: var(--bg-actividad); }
   .card h3 { margin: 8px 0 4px; font-size: 1.12rem; font-weight: 700; letter-spacing: -.01em; line-height: 1.3; }
   .meta { color: var(--muted); font-size: .8rem; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
   .meta .sep { opacity: .5; }
@@ -107,6 +127,14 @@
   .when { display: inline-flex; gap: 6px; align-items: center; background: var(--primary-soft); color: var(--primary);
     padding: 5px 10px; border-radius: 10px; font-size: .86rem; font-weight: 600; margin-top: 6px; }
   .t-actividad .when { background: var(--c-actividad-soft); color: var(--c-actividad); }
+  .repite { font-size: .85rem; color: var(--muted); margin-top: 6px; line-height: 1.45; }
+  .repite b { color: var(--text); font-weight: 600; }
+  .regla { background: var(--fill); border-radius: 12px; padding: 10px 12px; margin-top: 8px; }
+  .regla .sems { display: flex; gap: 6px; flex-wrap: wrap; }
+  .regla .sems label { margin: 0; display: inline-flex; align-items: center; gap: 4px; background: var(--card); color: var(--text);
+    border-radius: 999px; padding: 5px 11px; font-size: .88rem; cursor: pointer; }
+  .regla .sems input { width: 16px; height: 16px; }
+  .regla .grid2 { margin-top: 8px; }
   .thumb { display: block; width: 100%; max-height: 420px; object-fit: contain; background: var(--card2);
     border-radius: 12px; margin-top: 10px; cursor: zoom-in; }
   #pdfv { position: fixed; inset: 0; z-index: 45; background: #1c1c1e; display: flex; flex-direction: column; }
@@ -159,7 +187,8 @@
   .seg button { flex: 1; border: 0; background: none; color: var(--text); padding: 10px; font: inherit; font-size: 1.02rem;
     font-weight: 500; cursor: pointer; border-radius: 9px; }
   .seg button.on { background: var(--card); font-weight: 700; box-shadow: 0 2px 6px rgba(0,0,0,.12); }
-  @media (prefers-color-scheme: dark) { .seg button.on { background: #636366; } }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .seg button.on { background: #636366; } }
+  :root[data-theme="dark"] .seg button.on { background: #636366; }
   .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
   .grid2 label { margin-top: 4px; }
 
@@ -229,6 +258,7 @@
     <h1 id="congName">Tablón</h1>
     <small id="hello"></small>
   </div>
+  <button id="btnTema" title="Tema: automático" aria-label="Cambiar tema claro u oscuro">◐</button>
   <button id="btnLock" title="Bloquear" aria-label="Bloquear" hidden>🔒</button>
   <button id="btnRefresh" title="Actualizar" aria-label="Actualizar" hidden>↻</button>
 </header>
@@ -574,6 +604,24 @@ function show(v) {
   ({ tablon: renderBoard, informe: renderInforme, grupo: renderGrupo, admin: renderAdmin })[v]();
   scrollTo(0, 0);
 }
+/* Tema: automático (como el móvil) → claro → oscuro */
+const TEMAS = { auto: ['◐', 'automático (como el móvil)'], light: ['☀︎', 'claro'], dark: ['☾', 'oscuro'] };
+function aplicarTema(t, avisar) {
+  if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t; else delete document.documentElement.dataset.theme;
+  const osc = t === 'dark' || (t !== 'light' && matchMedia('(prefers-color-scheme: dark)').matches);
+  document.querySelectorAll('meta[name="theme-color"]').forEach(m => m.setAttribute('content', osc ? '#000000' : '#f2f2f7'));
+  $('#btnTema').textContent = TEMAS[t][0]; $('#btnTema').title = 'Tema: ' + TEMAS[t][1];
+  if (avisar) toast('Tema ' + TEMAS[t][1]);
+}
+let temaActual = ['light', 'dark'].includes(store.get('tablon_tema')) ? store.get('tablon_tema') : 'auto';
+aplicarTema(temaActual);
+$('#btnTema').onclick = () => {
+  temaActual = { auto: 'light', light: 'dark', dark: 'auto' }[temaActual];
+  if (temaActual === 'auto') store.del('tablon_tema'); else store.set('tablon_tema', temaActual);
+  aplicarTema(temaActual, true);
+};
+matchMedia('(prefers-color-scheme: dark)').addEventListener?.('change', () => aplicarTema(temaActual));
+
 $('#btnLock').onclick = async () => {
   await sb.rpc('gestion_bloquear').catch(() => {});
   if (state.me) { state.me.pin_hasta = null; pedirPinGestion(state.me); }
@@ -620,7 +668,43 @@ async function loadBoard() {
   } catch (e) { $('#board').innerHTML = `<div class="empty">⚠️ ${esc(e.message)}</div>`; }
 }
 
+/* ─── Actividades que se repiten cada mes (p. ej. salidas de grupo: 1.º y 3.º sábado, 2.º y 4.º domingo) ───
+   repeticion = { reglas: [ { sem: [1,3], dia: 6, hora: '10:00' }, … ] }   sem: 1-4 y -1 = último; dia: 0 domingo … 6 sábado */
+const DIAS = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
+const ORD = { 1: 'primer', 2: 'segundo', 3: 'tercer', 4: 'cuarto', '-1': 'último' };
+function diaNdelMes(y, m, dia, n) {
+  if (n === -1) { const d = new Date(y, m + 1, 0); d.setDate(d.getDate() - ((d.getDay() - dia + 7) % 7)); return d; }
+  const d = new Date(y, m, 1); d.setDate(1 + ((dia - d.getDay() + 7) % 7) + (n - 1) * 7);
+  return d.getMonth() === m ? d : null;
+}
+/** Próximas fechas (desde hoy, incluido el día de hoy) */
+function proximas(rep, cuantas = 4) {
+  const hoy = new Date(); hoy.setHours(0, 0, 0, 0);
+  const out = [];
+  for (let k = 0; k < 4 && out.length < cuantas + 8; k++) {
+    const y = hoy.getFullYear(), m = hoy.getMonth() + k;
+    for (const r of rep?.reglas || []) for (const n of r.sem || []) {
+      const d = diaNdelMes(y, m, r.dia, n); if (!d || d < hoy) continue;
+      const [hh, mm] = (r.hora || '').split(':').map(Number);
+      if (!isNaN(hh)) d.setHours(hh, mm || 0);
+      out.push({ d, hora: !!r.hora });
+    }
+  }
+  return out.sort((a, b) => a.d - b.d).filter((x, i, arr) => !i || +x.d !== +arr[i - 1].d).slice(0, cuantas);
+}
+function textoRegla(r) {
+  const sem = [...(r.sem || [])].sort((a, b) => (a === -1 ? 9 : a) - (b === -1 ? 9 : b)).map(n => ORD[n]);
+  const lista = sem.length > 1 ? sem.slice(0, -1).join(', ') + ' y ' + sem.at(-1) : sem[0] || '';
+  return `${lista} ${DIAS[r.dia]}${r.hora ? ' a las ' + r.hora : ''}`;
+}
+const textoRepeticion = rep => (rep?.reglas || []).map(textoRegla).join('; ').replace(/^./, c => c.toUpperCase());
+const fechaCorta2 = x => x.d.toLocaleDateString('es-ES', { weekday: 'short', day: 'numeric', month: 'short' })
+  + (x.hora ? ' · ' + x.d.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }) : '');
+/** Fecha para ordenar: la próxima de las que se repiten, o la fecha fija */
+const fechaOrden = it => it.repeticion?.reglas?.length ? (proximas(it.repeticion, 1)[0]?.d.toISOString() || '') : it.fecha_evento;
+
 function isPast(it) {
+  if (it.repeticion?.reglas?.length) return false;
   if (it.tipo !== 'actividad' || !it.fecha_evento) return false;
   const d = new Date(it.fecha_evento); d.setHours(23, 59, 59);
   return d < new Date();
@@ -632,13 +716,19 @@ function sortItems(list) {
     if (a.fijado && a.tipo !== b.tipo) return (PRIO_FIJADO[a.tipo] ?? 9) - (PRIO_FIJADO[b.tipo] ?? 9);   // fijados: anuncios arriba
     const pa = isPast(a), pb = isPast(b);
     if (pa !== pb) return pa ? 1 : -1;
-    if (a.tipo === 'actividad' && b.tipo === 'actividad' && !pa && a.fecha_evento && b.fecha_evento)
-      return a.fecha_evento.localeCompare(b.fecha_evento);
+    if (a.tipo === 'actividad' && b.tipo === 'actividad' && !pa && fechaOrden(a) && fechaOrden(b))
+      return fechaOrden(a).localeCompare(fechaOrden(b));
     return (b.creado || '').localeCompare(a.creado || '');
   });
 }
 function linkify(s) { return s.replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1" target="_blank" rel="noopener">$1</a>'); }
 
+function bloqueRepite(rep) {
+  const [prox, ...sig] = proximas(rep, 4);
+  const ico = svgI('<path d="M17 2.5l3 3-3 3"/><path d="M4 11V9.5a4 4 0 0 1 4-4h12M7 21.5l-3-3 3-3"/><path d="M20 13v1.5a4 4 0 0 1-4 4H4"/>');
+  return `<div class="when">${ico} ${prox ? 'Próxima: ' + esc(fechaCorta2(prox)) : 'Se repite'}</div>
+    <div class="repite"><b>${esc(textoRepeticion(rep))}</b>${sig.length ? `<br>Después: ${sig.map(x => esc(fechaCorta2(x))).join(' · ')}` : ''}</div>`;
+}
 function itemCard(it, admin = false) {
   const url = it.archivo_path ? state.urls[it.archivo_path] : null;
   const media = url && isImg(it)
@@ -658,7 +748,8 @@ function itemCard(it, admin = false) {
         ${it.fijado ? `<span class="fij">${ICO_PIN} Fijado</span>` : ''}
       </div>
       <h3>${esc(it.titulo)}</h3>
-      ${it.fecha_evento ? `<div class="when">${svgI('<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>')} ${esc(fmtFecha(it.fecha_evento))}</div>` : ''}
+      ${it.repeticion?.reglas?.length ? bloqueRepite(it.repeticion)
+        : it.fecha_evento ? `<div class="when">${svgI('<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>')} ${esc(fmtFecha(it.fecha_evento))}</div>` : ''}
       ${it.texto ? `<p class="texto">${linkify(esc(it.texto))}</p>` : ''}
       ${media}
       ${(fileBtn || adminBtns) ? `<div class="row">${fileBtn}${adminBtns}</div>` : ''}
@@ -1157,7 +1248,8 @@ async function avisarGrupo(id, recienPublicado = false) {
   const conEnlace = grupos.filter(g => g.enlace_codigo);
   const ico = { cuadrante: '📋', actividad: '🗓', anuncio: '📢' }[it.tipo] || '📌';
   const texto = g => `${ico} ${recienPublicado ? 'Nuevo en el tablón' : 'Actualizado en el tablón'}: ${it.titulo}` +
-    `${it.fecha_evento ? '\n🗓 ' + fmtFecha(it.fecha_evento) : ''}\n👉 ${grupoUrl(g.enlace_codigo)}`;
+    `${it.repeticion?.reglas?.length ? '\n🔁 ' + textoRepeticion(it.repeticion) + (proximas(it.repeticion, 1)[0] ? '\n🗓 Próxima: ' + fechaCorta2(proximas(it.repeticion, 1)[0]) : '')
+      : it.fecha_evento ? '\n🗓 ' + fmtFecha(it.fecha_evento) : ''}\n👉 ${grupoUrl(g.enlace_codigo)}`;
   modal(`
     <h3>${recienPublicado ? '✓ Publicado · ' : ''}Avisar al grupo</h3>
     ${conEnlace.length ? `<p class="muted">Se abre WhatsApp con el mensaje escrito: elige el grupo y envía.</p>
@@ -1189,19 +1281,76 @@ function adminPublicar() {
     <select id="pTipo"><option value="cuadrante">Cuadrante</option><option value="actividad">Actividad</option><option value="anuncio">Anuncio</option></select>
     <label for="pTit">Título</label><input id="pTit" maxlength="200" placeholder="Ej: Programa reunión entre semana — octubre">
     <label for="pTxt">Texto (opcional)</label><textarea id="pTxt" maxlength="5000"></textarea>
-    <div id="pFechaBox" hidden><label for="pFecha">Fecha y hora de la actividad</label><input id="pFecha" type="datetime-local"></div>
+    <div id="pFechaBox" hidden>
+      <label>¿Cuándo es?</label>
+      <div class="seg" id="pCuando"><button data-c="fija" class="on">Un día concreto</button><button data-c="repite">Se repite cada mes</button></div>
+      <div id="pFijaBox"><label for="pFecha">Fecha y hora</label><input id="pFecha" type="datetime-local"></div>
+      <div id="pRepBox" hidden>
+        <div class="row" style="margin-top:10px"><button class="btn sec sm" id="pSalidas">Rellenar: salidas de grupo</button></div>
+        <div id="pReglas"></div>
+        <div class="row"><button class="btn ghost sm" id="pMasRegla">＋ Añadir otro día</button></div>
+        <p class="muted" id="pRepPrev" style="margin:10px 4px 0"></p>
+      </div>
+    </div>
     <label for="pFile">Archivo (PDF o imagen, opcional)</label><input id="pFile" type="file" accept="application/pdf,image/*">
     <label class="check"><input type="checkbox" id="pPin"> Fijar arriba del todo</label>
     <div class="row"><button class="btn block" id="pGo">Publicar</button></div></div>`;
   const tipo = $('#pTipo');
   tipo.onchange = () => { $('#pFechaBox').hidden = tipo.value !== 'actividad'; };
+  // Fecha fija o repetición mensual
+  let cuando = 'fija', reglas = [{ sem: [], dia: 6, hora: '' }];
+  const pintarReglas = () => {
+    $('#pReglas').innerHTML = reglas.map((r, i) => `
+      <div class="regla" data-i="${i}">
+        <div class="sems">${[1, 2, 3, 4, -1].map(n => `<label><input type="checkbox" value="${n}" ${r.sem.includes(n) ? 'checked' : ''}>
+          ${n === -1 ? 'Último' : n + '.º'}</label>`).join('')}</div>
+        <div class="grid2">
+          <div><label>Día</label><select class="rDia">${DIAS.map((d, k) => [k, d]).slice(1).concat([[0, 'domingo']])
+            .map(([k, d]) => `<option value="${k}" ${r.dia === k ? 'selected' : ''}>${d}</option>`).join('')}</select></div>
+          <div><label>Hora</label><input class="rHora" type="time" value="${esc(r.hora)}"></div>
+        </div>
+        ${reglas.length > 1 ? '<div class="row" style="margin-top:6px"><button class="btn danger sm rQuitar">Quitar</button></div>' : ''}
+      </div>`).join('');
+    $('#pReglas').querySelectorAll('.regla').forEach(el => {
+      const r = reglas[+el.dataset.i];
+      el.querySelectorAll('.sems input').forEach(c => c.onchange = () => {
+        r.sem = [...el.querySelectorAll('.sems input:checked')].map(x => +x.value); previa(); });
+      el.querySelector('.rDia').onchange = e => { r.dia = +e.target.value; previa(); };
+      el.querySelector('.rHora').onchange = e => { r.hora = e.target.value; previa(); };
+      if (el.querySelector('.rQuitar')) el.querySelector('.rQuitar').onclick = () => { reglas.splice(+el.dataset.i, 1); pintarReglas(); };
+    });
+    previa();
+  };
+  const reglasValidas = () => reglas.filter(r => r.sem.length);
+  const previa = () => {
+    const rs = reglasValidas();
+    $('#pRepPrev').innerHTML = rs.length ? `<b>${esc(textoRepeticion({ reglas: rs }))}</b><br>Próximas: ${proximas({ reglas: rs }, 4).map(x => esc(fechaCorta2(x))).join(' · ')}`
+      : 'Marca qué semanas del mes (1.º, 2.º…) y el día.';
+  };
+  $('#pCuando').querySelectorAll('button').forEach(b => b.onclick = () => {
+    cuando = b.dataset.c;
+    $('#pCuando').querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b));
+    $('#pFijaBox').hidden = cuando !== 'fija'; $('#pRepBox').hidden = cuando !== 'repite';
+    if (cuando === 'repite') pintarReglas();
+  });
+  $('#pSalidas').onclick = () => {
+    reglas = [{ sem: [1, 3], dia: 6, hora: reglas[0]?.hora || '' }, { sem: [2, 4], dia: 0, hora: reglas[1]?.hora || '' }];
+    if (!$('#pTit').value.trim()) $('#pTit').value = 'Salidas de grupo';
+    pintarReglas();
+  };
+  $('#pMasRegla').onclick = () => { reglas.push({ sem: [], dia: 0, hora: '' }); pintarReglas(); };
+
   $('#pGo').onclick = async e => {
     const titulo = $('#pTit').value.trim();
     if (!titulo) return toast('Falta el título');
-    const fecha = tipo.value === 'actividad' && $('#pFecha').value ? new Date($('#pFecha').value).toISOString() : null;
+    const esAct = tipo.value === 'actividad';
+    const repite = esAct && cuando === 'repite';
+    if (repite && !reglasValidas().length) return toast('Marca al menos una semana del mes (1.º, 2.º…)');
+    const fecha = esAct && !repite && $('#pFecha').value ? new Date($('#pFecha').value).toISOString() : null;
     const done = busy(e.target, 'Subiendo…');
     try {
-      const row = { tipo: tipo.value, titulo, texto: $('#pTxt').value.trim(), fecha_evento: fecha, fijado: $('#pPin').checked };
+      const row = { tipo: tipo.value, titulo, texto: $('#pTxt').value.trim(), fecha_evento: fecha, fijado: $('#pPin').checked,
+                    repeticion: repite ? { reglas: reglasValidas() } : null };
       const f = $('#pFile').files[0];
       if (f) {
         const { blob, name, type } = await prepareFile(f);
